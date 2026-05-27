@@ -197,7 +197,9 @@ export async function processIncomingMessage(msg) {
   }
 
   if (channel === 'whatsapp') {
+    console.log(`[bot] Enviando WPP a ${from}: ${cleanText.substring(0, 60)}`);
     await sendWhatsAppMessage(from, cleanText);
+    console.log(`[bot] WPP enviado OK a ${from}`);
   } else if (channel === 'instagram') {
     await sendInstagramMessage(from, cleanText);
   }
