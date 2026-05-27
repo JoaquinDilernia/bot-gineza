@@ -88,7 +88,6 @@ export async function processIncomingMessage(msg) {
   const botConfig = configDoc.exists ? configDoc.data() : {};
   console.log(`[bot] Contexto cargado para ${from} — humanMode: ${conversation.humanMode}`);
 
-  enrichCustomerFromTiendaNube(from).catch(() => {});
 
   if (conversation.humanMode) {
     if (text?.trim()) await appendMessage(from, { role: 'user', content: text, contactName });
