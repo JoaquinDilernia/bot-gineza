@@ -105,7 +105,8 @@ function buildMessages(conversationHistory, newMessage, imageData = null) {
   if (conversationHistory?.length) {
     const recent = conversationHistory.slice(-10);
     for (const msg of recent) {
-      messages.push({ role: msg.role, content: msg.content });
+      const role = msg.role === 'user' ? 'user' : 'assistant';
+      messages.push({ role, content: msg.content });
     }
   }
   if (imageData) {
