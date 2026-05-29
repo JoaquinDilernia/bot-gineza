@@ -41,6 +41,9 @@ router.patch('/:contactId/status', async (req, res) => {
       return res.status(400).json({ error: `Status inválido. Valores permitidos: ${valid.join(', ')}` });
     }
     await updateConversationStatus(req.params.contactId, status);
+    if (status === 'resolved') {
+      await updateHumanMode(req.params.contactId, false);
+    }
     res.json({ ok: true, status });
   } catch (err) {
     res.status(500).json({ error: err.message });
