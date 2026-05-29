@@ -112,7 +112,7 @@ export async function getCustomerOrders(customerId) {
   try {
     const { data } = await client.get('/orders', {
       params: {
-        customer_id: customerId,
+        customer_ids: customerId,
         fields: 'id,number,status,payment_status,shipping_status,created_at,total,products',
         sort_by: 'created_at',
         sort_direction: 'desc',
