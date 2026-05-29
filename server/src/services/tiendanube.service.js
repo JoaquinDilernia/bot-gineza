@@ -19,16 +19,19 @@ const client = axios.create({
 export async function findOrder(query) {
   try {
     const fields = 'id,number,status,payment_status,shipping_status,customer,products,total,shipping_tracking_url,shipping_option,note,created_at';
-    const isEmail = query.includes('@');
-    const params = isEmail
-      ? { q: query, fields }
-      : { number: query.trim(), fields };
+    const params = { q: query.trim(), fields, per_page: 10 };
 
     console.log('[tiendanube] findOrder params:', params);
     const { data } = await client.get('/orders', { params });
     console.log('[tiendanube] findOrder results:', data?.length ?? 0, 'orders found');
-    if (data?.length) console.log('[tiendanube] first match number:', data[0].number);
-    return data?.[0] ?? null;
+
+    const isEmail = query.includes('@');
+    const result = isEmail
+      ? (data?.[0] ?? null)
+      : (data?.find(o => String(o.number) === String(query.trim())) ?? null);
+
+    console.log('[tiendanube] exact match:', result?.number ?? 'none');
+    return result;
   } catch (err) {
     console.error('[tiendanube] Error buscando pedido:', err.message, err.response?.status, err.response?.data);
     return null;

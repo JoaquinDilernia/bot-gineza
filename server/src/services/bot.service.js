@@ -41,13 +41,13 @@ const URGENCY_KEYWORDS = [
 // Detecta el marcador de escalada y retorna { shouldEscalate, assignTo, cleanText }
 function parseEscalationMarker(text) {
   if (/\[ESCALAR_JOAQUIN\]/.test(text)) {
-    return { shouldEscalate: true, assignTo: 'joaquin', cleanText: text.replace(/\[ESCALAR_JOAQUIN\][^\n]*\n?/g, '').trim() };
+    return { shouldEscalate: true, assignTo: 'joaquin', cleanText: text.replace(/\[ESCALAR_JOAQUIN\]\s*/g, '').trim() };
   }
   if (/\[ESCALAR_SOFIA\]/.test(text)) {
-    return { shouldEscalate: true, assignTo: 'sofia', cleanText: text.replace(/\[ESCALAR_SOFIA\][^\n]*\n?/g, '').trim() };
+    return { shouldEscalate: true, assignTo: 'sofia', cleanText: text.replace(/\[ESCALAR_SOFIA\]\s*/g, '').trim() };
   }
   if (/\[ESCALAR\]/.test(text)) {
-    return { shouldEscalate: true, assignTo: null, cleanText: text.replace(/\[ESCALAR\][^\n]*\n?/g, '').trim() };
+    return { shouldEscalate: true, assignTo: null, cleanText: text.replace(/\[ESCALAR\]\s*/g, '').trim() };
   }
   return { shouldEscalate: false, assignTo: null, cleanText: text };
 }

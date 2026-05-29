@@ -76,6 +76,7 @@ Cuando tenés información de un pedido, la compartís directamente sin pedir ve
   prompt += ESCALATION_INSTRUCTIONS;
   if (knowledgeBase) prompt += `\n\n--- INFORMACIÓN DE LA TIENDA ---\n${knowledgeBase}`;
   if (customerContext) prompt += `\n\n--- PERFIL DEL CLIENTE ---\n${customerContext}`;
+  prompt += `\n\nREGLA CRÍTICA SOBRE PEDIDOS: NUNCA inventes, sugieras ni adivines números de pedido alternativos. Si el cliente menciona un número y no tenés información del pedido, decí que no lo encontraste y pedí que confirme el número o te dé el email con el que compró. No sugieras que "quizás es otro número".`;
   if (orderInfo) {
     prompt += `\n\n--- INFORMACIÓN DEL PEDIDO CONSULTADO ---\n${JSON.stringify(orderInfo, null, 2)}`;
     prompt += `\n\nGuía para interpretar el pedido:
