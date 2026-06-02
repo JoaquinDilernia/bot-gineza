@@ -1,5 +1,4 @@
 import { getDb } from './firebase.service.js';
-import admin from 'firebase-admin';
 import { sendWhatsAppMessage, sendInstagramMessage } from './meta.service.js';
 import { updateConversationStatus } from './conversation.service.js';
 
@@ -16,18 +15,21 @@ export async function closeInactiveConversations() {
 
   const cutoff = new Date();
   cutoff.setHours(cutoff.getHours() - inactiveHours);
-  const cutoffTs = admin.firestore.Timestamp.fromDate(cutoff);
 
   const snap = await db.collection('conversations')
     .where('status', '==', 'bot')
-    .where('updatedAt', '<=', cutoffTs)
     .get();
 
-  if (snap.empty) return;
+  const staleDocs = snap.docs.filter(doc => {
+    const updatedAt = doc.data().updatedAt;
+    return updatedAt && updatedAt.toDate() <= cutoff;
+  });
 
-  console.log(`[inactivity] Cerrando ${snap.size} conversaciones inactivas (>${inactiveHours}h)`);
+  if (staleDocs.length === 0) return;
 
-  for (const doc of snap.docs) {
+  console.log(`[inactivity] Cerrando ${staleDocs.length} conversaciones inactivas (>${inactiveHours}h)`);
+
+  for (const doc of staleDocs) {
     const data = doc.data();
     const contactId = doc.id;
 

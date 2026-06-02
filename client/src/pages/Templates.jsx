@@ -58,7 +58,7 @@ export default function Templates() {
   }
 
   async function handleDelete(id) {
-    await authFetch(`/api/templates/${id}`, { method: 'DELETE' });
+    await authFetch(BASE_URL + `/api/templates/${id}`, { method: 'DELETE' });
     setTemplates(prev => prev.filter(t => t.id !== id));
   }
 

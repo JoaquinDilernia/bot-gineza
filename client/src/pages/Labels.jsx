@@ -39,7 +39,7 @@ export default function Labels() {
   }
 
   async function handleDelete(id) {
-    await authFetch(`/api/labels/${id}`, { method: 'DELETE' });
+    await authFetch(BASE_URL + `/api/labels/${id}`, { method: 'DELETE' });
     setLabels(prev => prev.filter(l => l.id !== id));
   }
 

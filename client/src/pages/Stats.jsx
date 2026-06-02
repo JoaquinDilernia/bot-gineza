@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { authFetch } from '../lib/api';
+import { authFetch, BASE_URL } from '../lib/api';
 import styles from './Stats.module.css';
 
 const PERIODS = [
@@ -39,7 +39,7 @@ export default function Stats() {
   useEffect(() => {
     setLoading(true);
     setError(null);
-    authFetch(`/api/stats?period=${period}`)
+    authFetch(BASE_URL + `/api/stats?period=${period}`)
       .then(r => {
         if (!r.ok) throw new Error(`Error ${r.status} al cargar estadísticas`);
         return r.json();

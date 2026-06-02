@@ -47,7 +47,7 @@ export default function QuickReplies() {
   }
 
   async function handleDelete(id) {
-    await authFetch(`/api/quick-replies/${id}`, { method: 'DELETE' });
+    await authFetch(BASE_URL + `/api/quick-replies/${id}`, { method: 'DELETE' });
     setReplies(prev => prev.filter(r => r.id !== id));
   }
 

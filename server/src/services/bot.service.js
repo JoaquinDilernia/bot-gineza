@@ -39,15 +39,21 @@ const URGENCY_KEYWORDS = [
 ];
 
 // Detecta el marcador de escalada y retorna { shouldEscalate, assignTo, cleanText }
+// Si el marcador está solo en su línea → borra la línea (nota interna no llega al cliente).
+// Si el marcador está al inicio de la única línea con texto (formato viejo) → solo borra el token.
 function parseEscalationMarker(text) {
-  if (/\[ESCALAR_JOAQUIN\]/.test(text)) {
-    return { shouldEscalate: true, assignTo: 'joaquin', cleanText: text.replace(/\[ESCALAR_JOAQUIN\]\s*/g, '').trim() };
-  }
-  if (/\[ESCALAR_SOFIA\]/.test(text)) {
-    return { shouldEscalate: true, assignTo: 'sofia', cleanText: text.replace(/\[ESCALAR_SOFIA\]\s*/g, '').trim() };
-  }
-  if (/\[ESCALAR\]/.test(text)) {
-    return { shouldEscalate: true, assignTo: null, cleanText: text.replace(/\[ESCALAR\]\s*/g, '').trim() };
+  const MARKERS = [
+    { re: /\[ESCALAR_JOAQUIN\]/, assignTo: 'joaquin' },
+    { re: /\[ESCALAR_SOFIA\]/,   assignTo: 'sofia' },
+    { re: /\[ESCALAR\]/,         assignTo: null },
+  ];
+  for (const { re, assignTo } of MARKERS) {
+    if (!re.test(text)) continue;
+    // Eliminar la línea entera que contiene el marcador (borra notas internas)
+    const withoutLine = text.replace(/^[^\n]*\[ESCALAR(?:_JOAQUIN|_SOFIA)?\][^\n]*\n?/m, '').trim();
+    // Si queda texto → usarlo; si quedó vacío (marcador era toda la respuesta) → solo quitar el token
+    const cleanText = withoutLine || text.replace(re, '').trim();
+    return { shouldEscalate: true, assignTo, cleanText };
   }
   return { shouldEscalate: false, assignTo: null, cleanText: text };
 }
@@ -203,11 +209,24 @@ export async function processIncomingMessage(msg) {
   }
 
   if (channel === 'whatsapp') {
-    console.log(`[bot] Enviando WPP a ${from}: ${cleanText.substring(0, 60)}`);
-    await sendWhatsAppMessage(from, cleanText);
-    console.log(`[bot] WPP enviado OK a ${from}`);
+    if (!cleanText.trim()) {
+      console.warn(`[bot] cleanText vacío para ${from} — no se envía a WPP`);
+      return;
+    }
+    try {
+      console.log(`[bot] Enviando WPP a ${from}: ${cleanText.substring(0, 60)}`);
+      await sendWhatsAppMessage(from, cleanText);
+      console.log(`[bot] WPP enviado OK a ${from}`);
+    } catch (sendErr) {
+      console.error(`[bot] ERROR enviando WPP a ${from}:`, sendErr.response?.data ?? sendErr.message);
+    }
   } else if (channel === 'instagram') {
-    await sendInstagramMessage(from, cleanText);
+    if (!cleanText.trim()) return;
+    try {
+      await sendInstagramMessage(from, cleanText);
+    } catch (sendErr) {
+      console.error(`[bot] ERROR enviando IG a ${from}:`, sendErr.response?.data ?? sendErr.message);
+    }
   }
 }
 

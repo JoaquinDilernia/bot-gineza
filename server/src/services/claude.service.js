@@ -3,11 +3,14 @@ import https from 'https';
 const MODEL = 'claude-sonnet-4-6';
 
 const ESCALATION_INSTRUCTIONS = `
-IMPORTANTE — ESCALADA: Si la consulta requiere atención humana, comenzá tu respuesta con UNO de estos marcadores (solo el marcador, sin texto antes):
+IMPORTANTE — ESCALADA: Si la consulta requiere atención humana, poné UNO de estos marcadores en una línea separada dentro de tu respuesta (puede ir al principio o en medio, pero NUNCA agregues texto en la misma línea del marcador — el marcador debe estar solo en su línea):
 - [ESCALAR_JOAQUIN] — para temas de pagos, facturación, reembolsos, cobros incorrectos, problemas con tarjeta.
 - [ESCALAR_SOFIA] — para temas de envíos, demoras, seguimiento, cambios, devoluciones de productos.
 - [ESCALAR] — para reclamos graves, clientes muy enojados u otras situaciones urgentes sin categoría clara.
-Después del marcador escribís la respuesta normal al cliente, avisando que lo derivás y que puede haber una pequeña demora en la respuesta. Ejemplo: "[ESCALAR_SOFIA] Entiendo, ya te paso con alguien del equipo de envíos. Puede que tarde unos minutos en responderte, ¡pero van a ayudarte enseguida! 🤍"
+El resto de tu respuesta (antes o después del marcador) es lo que le llega al cliente: avisale que lo derivás y que puede haber una pequeña demora. El marcador es invisible para el cliente. Ejemplo correcto:
+"Entiendo, ya te paso con alguien del equipo de envíos. Puede que tarde unos minutos en responderte, ¡pero van a ayudarte enseguida! 🤍
+[ESCALAR_SOFIA]"
+NUNCA pongas texto descriptivo junto al marcador en la misma línea (ej: "[ESCALAR_SOFIA] Cliente consulta sobre..." está MAL).
 
 IMPORTANTE — CIERRE: Si la consulta está completamente resuelta y el cliente se despidió o ya no hay nada pendiente, empezá tu respuesta con [CERRAR].
 Ejemplo: "[CERRAR] ¡Con mucho gusto! Si necesitás algo más, escribinos cuando quieras."
