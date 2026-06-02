@@ -274,7 +274,7 @@ export default function Conversations() {
 
   async function loadMessages(contactId) {
     try {
-      const res = await authFetch(`/api/conversations/${contactId}/messages`);
+      const res = await authFetch(BASE_URL + `/api/conversations/${contactId}/messages`);
       const data = await res.json();
       setMessages(data.messages ?? []);
     } catch { setMessages([]); }
@@ -282,7 +282,7 @@ export default function Conversations() {
 
   async function loadCustomer(contactId) {
     try {
-      const res = await authFetch(`/api/customers/${contactId}`);
+      const res = await authFetch(BASE_URL + `/api/customers/${contactId}`);
       if (!res.ok) { setCustomer(null); return; }
       const data = await res.json();
       setCustomer(data.customer ?? null);
@@ -291,7 +291,7 @@ export default function Conversations() {
   }
 
   async function markRead(contactId) {
-    await authFetch(`/api/conversations/${contactId}/read`, { method: 'POST' }).catch(() => {});
+    await authFetch(BASE_URL + `/api/conversations/${contactId}/read`, { method: 'POST' }).catch(() => {});
     setConversations(prev => prev.map(c => c.id === contactId ? { ...c, unread: 0 } : c));
   }
 
@@ -299,7 +299,7 @@ export default function Conversations() {
     if (!selected || savingNotes) return;
     setSavingNotes(true);
     try {
-      await authFetch(`/api/customers/${selected.id}/notes`, {
+      await authFetch(BASE_URL + `/api/customers/${selected.id}/notes`, {
         method: 'PATCH',
         body: { notes },
       });
@@ -310,7 +310,7 @@ export default function Conversations() {
     if (!selected || syncing) return;
     setSyncing(true);
     try {
-      const res = await authFetch(`/api/customers/${selected.id}/sync`, { method: 'POST' });
+      const res = await authFetch(BASE_URL + `/api/customers/${selected.id}/sync`, { method: 'POST' });
       const data = await res.json();
       if (data.customer) { setCustomer(data.customer); setNotes(data.customer.agentNotes ?? ''); }
     } finally { setSyncing(false); }
@@ -320,7 +320,7 @@ export default function Conversations() {
     if (!selected || updating) return;
     setUpdating(true);
     try {
-      const res = await authFetch(`/api/conversations/${selected.id}/status`, {
+      const res = await authFetch(BASE_URL + `/api/conversations/${selected.id}/status`, {
         method: 'PATCH',
         body: { status },
       });
@@ -337,7 +337,7 @@ export default function Conversations() {
     const humanMode = !selected.humanMode;
     setUpdating(true);
     try {
-      const res = await authFetch(`/api/conversations/${selected.id}/mode`, {
+      const res = await authFetch(BASE_URL + `/api/conversations/${selected.id}/mode`, {
         method: 'PATCH',
         body: { humanMode },
       });
@@ -353,7 +353,7 @@ export default function Conversations() {
     setUpdating(true);
     try {
       const assignedTo = selected.assignedTo === agentId ? null : agentId;
-      const res = await authFetch(`/api/conversations/${selected.id}/assign`, {
+      const res = await authFetch(BASE_URL + `/api/conversations/${selected.id}/assign`, {
         method: 'PATCH',
         body: { assignedTo },
       });
@@ -368,7 +368,7 @@ export default function Conversations() {
     if (!selected) return;
     setLabelDropOpen(false);
     if (selected.labels?.includes(label)) return;
-    await authFetch(`/api/labels/conversations/${selected.id}`, {
+    await authFetch(BASE_URL + `/api/labels/conversations/${selected.id}`, {
       method: 'PATCH',
       body: { action: 'add', label },
     });
@@ -379,7 +379,7 @@ export default function Conversations() {
 
   async function removeLabel(label) {
     if (!selected) return;
-    await authFetch(`/api/labels/conversations/${selected.id}`, {
+    await authFetch(BASE_URL + `/api/labels/conversations/${selected.id}`, {
       method: 'PATCH',
       body: { action: 'remove', label },
     });
@@ -393,11 +393,17 @@ export default function Conversations() {
     if (!reply.trim() || !selected || sending) return;
     setSending(true);
     try {
-      const res = await authFetch(`/api/conversations/${selected.id}/reply`, {
+      const res = await authFetch(BASE_URL + `/api/conversations/${selected.id}/reply`, {
         method: 'POST',
         body: { message: reply.trim() },
       });
-      if (res.ok) { setReply(''); await loadMessages(selected.id); }
+      await loadMessages(selected.id);
+      if (res.ok) {
+        setReply('');
+      } else {
+        const data = await res.json().catch(() => ({}));
+        alert(`⚠️ Mensaje guardado en el panel pero NO llegó al cliente.\n${data.error ?? 'Error desconocido'}`);
+      }
     } finally { setSending(false); }
   }
 

@@ -100,6 +100,7 @@ router.post('/:contactId/reply', async (req, res) => {
 
     await appendMessage(contactId, { role: 'admin', content: message.trim() });
 
+    let sendError = null;
     try {
       if (channel === 'whatsapp') {
         await sendWhatsAppMessage(contactId, message.trim());
@@ -107,9 +108,14 @@ router.post('/:contactId/reply', async (req, res) => {
         await sendInstagramMessage(contactId, message.trim());
       }
     } catch (sendErr) {
-      console.warn('[reply] No se pudo enviar por canal:', sendErr.message);
+      const detail = sendErr.response?.data ?? sendErr.message;
+      console.error('[reply] Error enviando por canal:', JSON.stringify(detail));
+      sendError = typeof detail === 'object' ? JSON.stringify(detail) : detail;
     }
 
+    if (sendError) {
+      return res.status(502).json({ error: `Guardado en panel pero falló el envío: ${sendError}` });
+    }
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
