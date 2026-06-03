@@ -23,12 +23,10 @@ const CHANNEL_CONFIG = {
 };
 
 const FILTERS = [
-  { value: 'all',       label: 'Todas' },
-  { value: 'mine',      label: 'Las mías' },
-  { value: 'bot',       label: 'Bot activo' },
-  { value: 'urgent',    label: 'Urgente' },
-  { value: 'escalated', label: 'Derivado' },
-  { value: 'resolved',  label: 'Resuelto' },
+  { value: 'bot',    label: 'Bot' },
+  { value: 'mine',   label: 'Mis casos' },
+  { value: 'urgent', label: 'Urgentes' },
+  { value: 'all',    label: 'Todas' },
 ];
 
 function StatusChip({ status }) {
@@ -150,14 +148,13 @@ export default function Conversations() {
   const [notes, setNotes] = useState('');
   const [savingNotes, setSavingNotes] = useState(false);
   const [syncing, setSyncing] = useState(false);
-  const [filter, setFilter] = useState('all');
+  const [filter, setFilter] = useState('bot');
   const [labelFilter, setLabelFilter] = useState(null);
   const [search, setSearch] = useState('');
   const [reply, setReply] = useState('');
   const [sending, setSending] = useState(false);
   const [updating, setUpdating] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [viewingAs, setViewingAs] = useState(() => agent?.id ?? 'sofia');
   const [allLabels, setAllLabels] = useState([]);
   const [labelDropOpen, setLabelDropOpen] = useState(false);
   const [quickReplies, setQuickReplies] = useState([]);
@@ -407,11 +404,18 @@ export default function Conversations() {
     } finally { setSending(false); }
   }
 
+  const myId = agent?.id;
+  const otherAgent = myId === 'joaquin' ? 'sofia' : 'joaquin';
+
   const filtered = conversations.filter(c => {
-    if (filter === 'mine') {
-      if (c.assignedTo !== viewingAs) return false;
-    } else if (filter !== 'all') {
-      if ((c.status || 'bot') !== filter) return false;
+    if (filter === 'bot') {
+      if ((c.status || 'bot') !== 'bot' || c.humanMode) return false;
+    } else if (filter === 'mine') {
+      if (c.assignedTo !== myId) return false;
+    } else if (filter === 'urgent') {
+      if ((c.status || 'bot') !== 'urgent') return false;
+    } else if (filter === 'all') {
+      if (c.assignedTo === otherAgent) return false;
     }
     if (labelFilter && !(c.labels ?? []).includes(labelFilter)) return false;
     if (search) {
@@ -439,17 +443,6 @@ export default function Conversations() {
           <div className={styles.sidebarTop}>
             <h1 className={styles.sidebarTitle}>Conversaciones</h1>
             <button className={styles.newConvBtn} onClick={openNewConvModal} title="Nueva conversación">＋</button>
-          </div>
-          <div className={styles.viewingAs}>
-            {AGENTS.map(a => (
-              <button
-                key={a.id}
-                className={`${styles.agentToggle} ${viewingAs === a.id ? styles.agentToggleActive : ''}`}
-                onClick={() => setViewingAs(a.id)}
-              >
-                {a.label}
-              </button>
-            ))}
           </div>
           <input
             className={styles.searchInput}
@@ -606,7 +599,7 @@ export default function Conversations() {
             {isHuman ? (
               <form className={styles.replyForm} onSubmit={sendReply}>
                 <div className={styles.replyHumanBadge}>
-                  Modo agente activo — Gina no responde · Respondiendo como <strong>{AGENTS.find(a => a.id === viewingAs)?.label}</strong>
+                  Modo agente activo — Gina no responde · Respondiendo como <strong>{AGENTS.find(a => a.id === myId)?.label ?? myId}</strong>
                 </div>
                 <div className={styles.replyRow}>
                   <div className={styles.replyInputWrap}>
@@ -813,9 +806,14 @@ export default function Conversations() {
                     onChange={e => selectTemplate(templates.find(t => t.id === e.target.value) ?? null)}
                   >
                     <option value="">Seleccionar plantilla...</option>
-                    {templates.map(t => (
-                      <option key={t.id} value={t.id}>{t.displayName} ({t.name})</option>
-                    ))}
+                    {templates.map(t => {
+                      const notApproved = t.metaStatus && t.metaStatus !== 'APPROVED';
+                      return (
+                        <option key={t.id} value={t.id} disabled={notApproved}>
+                          {t.displayName} ({t.name}){notApproved ? ` — ${t.metaStatus}` : ''}
+                        </option>
+                      );
+                    })}
                   </select>
                 )}
               </div>

@@ -1,10 +1,19 @@
 import { Router } from 'express';
-import { getAllTemplates, createTemplate, deleteTemplate } from '../services/template.service.js';
+import { getAllTemplates, createTemplate, deleteTemplate, syncTemplateStatuses } from '../services/template.service.js';
 
 const router = Router();
 
 router.get('/', async (req, res) => {
   try {
+    res.json(await getAllTemplates());
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/sync', async (req, res) => {
+  try {
+    await syncTemplateStatuses();
     res.json(await getAllTemplates());
   } catch (err) {
     res.status(500).json({ error: err.message });

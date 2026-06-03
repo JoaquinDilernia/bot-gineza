@@ -39,7 +39,7 @@ export default function KnowledgeBase() {
     try {
       let res;
       if (editing) {
-        res = await authFetch(`/api/knowledge/${editing}`, {
+        res = await authFetch(BASE_URL + `/api/knowledge/${editing}`, {
           method: 'PUT',
           body: form,
         });
@@ -62,12 +62,12 @@ export default function KnowledgeBase() {
 
   async function handleDelete(id) {
     if (!confirm('¿Eliminar este item?')) return;
-    await authFetch(`/api/knowledge/${id}`, { method: 'DELETE' });
+    await authFetch(BASE_URL + `/api/knowledge/${id}`, { method: 'DELETE' });
     fetchItems();
   }
 
   async function handleToggle(item) {
-    await authFetch(`/api/knowledge/${item.id}`, {
+    await authFetch(BASE_URL + `/api/knowledge/${item.id}`, {
       method: 'PUT',
       body: { active: !item.active },
     });

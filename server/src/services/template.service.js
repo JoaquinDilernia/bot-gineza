@@ -1,4 +1,5 @@
 import { getDb } from './firebase.service.js';
+import { fetchMetaTemplateStatuses } from './meta.service.js';
 
 const COLLECTION = 'whatsapp_templates';
 
@@ -17,10 +18,28 @@ export async function createTemplate({ name, displayName, bodyText, language, ca
     language: language?.trim() || 'es_AR',
     category: category || 'UTILITY',
     params: Array.isArray(params) ? params : [],
+    metaStatus: 'PENDING',
     createdAt: new Date(),
   });
   const snap = await doc.get();
   return { id: snap.id, ...snap.data() };
+}
+
+export async function syncTemplateStatuses() {
+  const metaTemplates = await fetchMetaTemplateStatuses();
+  if (metaTemplates.length === 0) return;
+  const db = getDb();
+  const snap = await db.collection(COLLECTION).get();
+  if (snap.empty) return;
+  const batch = db.batch();
+  for (const doc of snap.docs) {
+    const { name, language } = doc.data();
+    const metaMatch = metaTemplates.find(t => t.name === name && t.language === language);
+    if (metaMatch) {
+      batch.update(doc.ref, { metaStatus: metaMatch.status });
+    }
+  }
+  await batch.commit();
 }
 
 export async function deleteTemplate(id) {

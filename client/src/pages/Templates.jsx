@@ -21,6 +21,7 @@ export default function Templates() {
   const [category, setCategory] = useState('UTILITY');
   const [paramsText, setParamsText] = useState('');
   const [saving, setSaving] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => { load(); }, []);
@@ -28,6 +29,16 @@ export default function Templates() {
   async function load() {
     const r = await authFetch(BASE_URL + '/api/templates');
     if (r.ok) setTemplates(await r.json());
+  }
+
+  async function handleSync() {
+    setSyncing(true);
+    try {
+      const r = await authFetch(BASE_URL + '/api/templates/sync', { method: 'POST' });
+      if (r.ok) setTemplates(await r.json());
+    } finally {
+      setSyncing(false);
+    }
   }
 
   function openModal() {
@@ -71,7 +82,12 @@ export default function Templates() {
             Plantillas aprobadas en Meta Business Manager para iniciar conversaciones fuera de la ventana de 24h
           </p>
         </div>
-        <button className={styles.newBtn} onClick={openModal}>+ Nueva plantilla</button>
+        <div className={styles.headerActions}>
+          <button className={styles.syncBtn} onClick={handleSync} disabled={syncing} title="Sincronizar estados con Meta">
+            {syncing ? '...' : '↻ Sincronizar'}
+          </button>
+          <button className={styles.newBtn} onClick={openModal}>+ Nueva plantilla</button>
+        </div>
       </div>
 
       <div className={styles.body}>
@@ -85,6 +101,7 @@ export default function Templates() {
                 <th className={styles.th}>DISPLAY NAME</th>
                 <th className={styles.th}>IDIOMA</th>
                 <th className={styles.th}>CATEGORÍA</th>
+                <th className={styles.th}>ESTADO</th>
                 <th className={styles.th}>PARÁMETROS</th>
                 <th className={styles.th}>PREVIEW</th>
                 <th className={styles.th}></th>
@@ -104,6 +121,11 @@ export default function Templates() {
                   </td>
                   <td className={styles.td}>
                     <span className={`${styles.catBadge} ${styles[`cat_${t.category}`]}`}>{t.category}</span>
+                  </td>
+                  <td className={styles.td}>
+                    {t.metaStatus && (
+                      <span className={`${styles.statusBadge} ${styles[`status_${t.metaStatus}`]}`}>{t.metaStatus}</span>
+                    )}
                   </td>
                   <td className={styles.td}>
                     <span className={styles.meta}>{t.params?.length ?? 0}</span>

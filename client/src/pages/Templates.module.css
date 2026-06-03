@@ -9,9 +9,16 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: var(--space-3);
   padding: var(--space-6) var(--space-8) var(--space-4);
   border-bottom: 1px solid var(--color-border);
   background: var(--color-surface);
+  flex-shrink: 0;
+}
+
+.headerActions {
+  display: flex;
+  gap: var(--space-2);
   flex-shrink: 0;
 }
 
@@ -44,6 +51,23 @@
   transition: opacity var(--transition-fast);
 }
 .newBtn:hover { opacity: 0.85; }
+
+.syncBtn {
+  height: 38px;
+  padding: 0 var(--space-4);
+  background: var(--color-surface-alt);
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: all var(--transition-fast);
+}
+.syncBtn:hover:not(:disabled) { background: var(--color-surface-hover); color: var(--color-text); }
+.syncBtn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .body {
   flex: 1;
@@ -138,6 +162,20 @@
 .cat_UTILITY       { background: #e8f4ff; color: #1a6ecc; }
 .cat_MARKETING     { background: #fff4e5; color: #b45309; }
 .cat_AUTHENTICATION { background: #f0fdf4; color: #16a34a; }
+
+.statusBadge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--radius-sm);
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+.status_APPROVED { background: #f0fdf4; color: #16a34a; }
+.status_PENDING  { background: #fff7ed; color: #c2410c; }
+.status_REJECTED { background: #fef2f2; color: #dc2626; }
+.status_PAUSED   { background: #f1f5f9; color: #64748b; }
 
 .preview {
   font-size: var(--font-size-sm);

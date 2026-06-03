@@ -156,6 +156,23 @@ export async function sendWhatsAppTemplate(to, templateName, language = 'es_AR',
   );
 }
 
+export async function fetchMetaTemplateStatuses() {
+  if (!process.env.META_ACCESS_TOKEN || !process.env.META_WHATSAPP_BUSINESS_ACCOUNT_ID) return [];
+  try {
+    const { data } = await axios.get(
+      `${META_API_URL}/${process.env.META_WHATSAPP_BUSINESS_ACCOUNT_ID}/message_templates`,
+      {
+        headers: { Authorization: `Bearer ${process.env.META_ACCESS_TOKEN}` },
+        params: { fields: 'name,status,language', limit: 100 },
+      }
+    );
+    return data.data ?? [];
+  } catch (err) {
+    console.error('[meta] fetchMetaTemplateStatuses error:', err.response?.data ?? err.message);
+    return [];
+  }
+}
+
 export function parseWhatsAppMessage(webhookBody) {
   try {
     const entry = webhookBody.entry?.[0];
