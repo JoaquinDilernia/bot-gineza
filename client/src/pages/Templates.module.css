@@ -69,6 +69,13 @@
 .syncBtn:hover:not(:disabled) { background: var(--color-surface-hover); color: var(--color-text); }
 .syncBtn:disabled { opacity: 0.5; cursor: not-allowed; }
 
+.syncMsg {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  align-self: center;
+}
+
 .body {
   flex: 1;
   overflow-y: auto;

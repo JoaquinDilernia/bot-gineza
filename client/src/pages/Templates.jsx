@@ -23,6 +23,7 @@ export default function Templates() {
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState('');
+  const [syncMsg, setSyncMsg] = useState('');
 
   useEffect(() => { load(); }, []);
 
@@ -33,9 +34,20 @@ export default function Templates() {
 
   async function handleSync() {
     setSyncing(true);
+    setSyncMsg('');
     try {
       const r = await authFetch(BASE_URL + '/api/templates/sync', { method: 'POST' });
-      if (r.ok) setTemplates(await r.json());
+      if (!r.ok) {
+        const body = await r.json().catch(() => ({}));
+        setSyncMsg('Error: ' + (body.error || r.status));
+        return;
+      }
+      const updated = await r.json();
+      setTemplates(updated);
+      const synced = updated.filter(t => t.metaStatus && t.metaStatus !== 'PENDING').length;
+      setSyncMsg(synced > 0 ? `${synced} plantilla(s) sincronizadas` : 'Sin coincidencias en Meta — verificá los nombres exactos');
+    } catch (err) {
+      setSyncMsg('Error de red: ' + err.message);
     } finally {
       setSyncing(false);
     }
@@ -86,6 +98,7 @@ export default function Templates() {
           <button className={styles.syncBtn} onClick={handleSync} disabled={syncing} title="Sincronizar estados con Meta">
             {syncing ? '...' : '↻ Sincronizar'}
           </button>
+          {syncMsg && <span className={styles.syncMsg}>{syncMsg}</span>}
           <button className={styles.newBtn} onClick={openModal}>+ Nueva plantilla</button>
         </div>
       </div>

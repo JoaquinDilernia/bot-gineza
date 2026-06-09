@@ -79,6 +79,15 @@ export async function updateAssignment(contactId, assignedTo) {
   });
 }
 
+export async function dispatchConversation(contactId, patch) {
+  const db = getDb();
+  const update = { updatedAt: new Date() };
+  if (patch.status !== undefined) update.status = patch.status;
+  if (patch.humanMode !== undefined) update.humanMode = !!patch.humanMode;
+  if (patch.assignedTo !== undefined) update.assignedTo = patch.assignedTo ?? null;
+  await db.collection(COLLECTION).doc(contactId).update(update);
+}
+
 export async function addLabelToConversation(contactId, label) {
   const db = getDb();
   await db.collection(COLLECTION).doc(contactId).update({
@@ -120,6 +129,7 @@ export async function listConversations(filters = {}) {
       messageCount: data.messages?.length ?? 0,
       lastMessage: lastMsg?.content ?? '',
       lastMessageAt: lastMsg?.timestamp ?? data.updatedAt,
+      updatedAt: data.updatedAt,
       createdAt: data.createdAt,
     };
   });

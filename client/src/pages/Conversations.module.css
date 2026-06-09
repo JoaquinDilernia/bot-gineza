@@ -1167,4 +1167,96 @@
   transition: opacity var(--transition-fast);
 }
 .newConvSubmitBtn:hover:not(:disabled) { opacity: 0.85; }
+
+/* ---- Dispatch action buttons ---- */
+.dispatchActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex-wrap: wrap;
+}
+
+.dispatchBtn {
+  height: 26px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--color-surface-alt);
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
+  transition: all var(--transition-fast);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.dispatchBtn:hover:not(:disabled) {
+  background: var(--color-primary-subtle);
+  color: var(--color-primary-dark);
+  border-color: var(--color-primary-light);
+}
+.dispatchBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+.dispatchBtnActive {
+  background: var(--color-primary-subtle);
+  color: var(--color-primary-dark);
+  border-color: var(--color-primary);
+}
+.dispatchBotBtn.dispatchBtnActive {
+  background: #f0fdf4;
+  color: #16a34a;
+  border-color: #16a34a;
+}
+.dispatchUrgentBtn {
+  background: var(--color-status-urgent-bg);
+  color: var(--color-status-urgent);
+  border-color: var(--color-status-urgent);
+}
+.dispatchUrgentBtn:hover:not(:disabled) {
+  background: var(--color-status-urgent);
+  color: #fff;
+}
+
+/* ---- Media in messages ---- */
+.msgMedia {
+  max-width: 260px;
+  max-height: 200px;
+  border-radius: var(--radius-md);
+  display: block;
+  object-fit: contain;
+}
+
+.msgAudio {
+  width: 240px;
+  height: 36px;
+  display: block;
+}
+
+.msgVideo {
+  max-width: 260px;
+  max-height: 180px;
+  border-radius: var(--radius-md);
+  display: block;
+}
+
+/* ---- Media send button ---- */
+.mediaFileInput {
+  display: none;
+}
+
+.mediaBtn {
+  height: 36px;
+  width: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-surface-alt);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: 16px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background var(--transition-fast);
+}
+.mediaBtn:hover:not(:disabled) { background: var(--color-surface-hover); }
+.mediaBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+
 .newConvSubmitBtn:disabled { opacity: 0.4; cursor: not-allowed; }

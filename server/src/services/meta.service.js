@@ -156,6 +156,50 @@ export async function sendWhatsAppTemplate(to, templateName, language = 'es_AR',
   );
 }
 
+export async function uploadMetaMedia(buffer, mimeType) {
+  if (!process.env.META_ACCESS_TOKEN || !process.env.META_PHONE_NUMBER_ID) return null;
+  const form = new FormData();
+  form.append('messaging_product', 'whatsapp');
+  form.append('type', mimeType);
+  form.append('file', new Blob([buffer], { type: mimeType }), 'upload');
+  const { data } = await axios.post(
+    `${META_API_URL}/${process.env.META_PHONE_NUMBER_ID}/media`,
+    form,
+    { headers: { Authorization: `Bearer ${process.env.META_ACCESS_TOKEN}` } }
+  );
+  return data.id;
+}
+
+export async function sendWhatsAppMedia(to, mediaId, mimeType) {
+  if (!process.env.META_ACCESS_TOKEN || !process.env.META_PHONE_NUMBER_ID) return;
+  const type = mimeType?.startsWith('audio/') ? 'audio' : mimeType?.startsWith('video/') ? 'video' : 'image';
+  await axios.post(
+    `${META_API_URL}/${process.env.META_PHONE_NUMBER_ID}/messages`,
+    {
+      messaging_product: 'whatsapp',
+      recipient_type: 'individual',
+      to,
+      type,
+      [type]: { id: mediaId },
+    },
+    { headers: { Authorization: `Bearer ${process.env.META_ACCESS_TOKEN}`, 'Content-Type': 'application/json' } }
+  );
+}
+
+export async function getMetaMediaStream(mediaId, res) {
+  if (!process.env.META_ACCESS_TOKEN) throw new Error('No META_ACCESS_TOKEN');
+  const { data: info } = await axios.get(`${META_API_URL}/${mediaId}`, {
+    headers: { Authorization: `Bearer ${process.env.META_ACCESS_TOKEN}` },
+  });
+  const response = await axios.get(info.url, {
+    headers: { Authorization: `Bearer ${process.env.META_ACCESS_TOKEN}` },
+    responseType: 'stream',
+  });
+  res.setHeader('Content-Type', info.mime_type || 'application/octet-stream');
+  res.setHeader('Cache-Control', 'private, max-age=3600');
+  response.data.pipe(res);
+}
+
 export async function fetchMetaTemplateStatuses() {
   if (!process.env.META_ACCESS_TOKEN || !process.env.META_WHATSAPP_BUSINESS_ACCOUNT_ID) return [];
   try {

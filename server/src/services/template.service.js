@@ -34,7 +34,9 @@ export async function syncTemplateStatuses() {
   const batch = db.batch();
   for (const doc of snap.docs) {
     const { name, language } = doc.data();
-    const metaMatch = metaTemplates.find(t => t.name === name && t.language === language);
+    const metaMatch =
+      metaTemplates.find(t => t.name === name && t.language === language) ??
+      metaTemplates.find(t => t.name === name);
     if (metaMatch) {
       batch.update(doc.ref, { metaStatus: metaMatch.status });
     }

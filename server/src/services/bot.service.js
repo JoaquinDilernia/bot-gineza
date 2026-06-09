@@ -96,6 +96,16 @@ export async function processIncomingMessage(msg) {
   const botConfig = configDoc.exists ? configDoc.data() : {};
   console.log(`[bot] Contexto cargado para ${from} — humanMode: ${conversation.humanMode}`);
 
+  // Auto-reopen resolved conversations when a new message arrives
+  if (conversation.status === 'resolved') {
+    await Promise.all([
+      updateConversationStatus(from, 'bot'),
+      updateHumanMode(from, false),
+    ]);
+    conversation.status = 'bot';
+    conversation.humanMode = false;
+    console.log(`[bot] Conversación ${from} reabierta automáticamente`);
+  }
 
   if (conversation.humanMode) {
     if (text?.trim()) await appendMessage(from, { role: 'user', content: text, contactName });
@@ -107,7 +117,7 @@ export async function processIncomingMessage(msg) {
   if (type === 'audio') {
     const prevAudios = history.filter(m => m.role === 'user' && m.mediaType === 'audio').length;
     const audioUserMsg = '[Audio recibido]';
-    await appendMessage(from, { role: 'user', content: audioUserMsg, mediaType: 'audio', contactName });
+    await appendMessage(from, { role: 'user', content: audioUserMsg, mediaType: 'audio', mediaId: mediaId ?? null, contactName });
 
     let reply;
     if (prevAudios >= 1) {
@@ -149,7 +159,7 @@ export async function processIncomingMessage(msg) {
       } catch { /* continue without image */ }
     }
     const userContent = text?.trim() ? `[Imagen] ${text}` : '[Imagen recibida]';
-    await appendMessage(from, { role: 'user', content: userContent, mediaType: 'image', contactName });
+    await appendMessage(from, { role: 'user', content: userContent, mediaType: 'image', mediaId: mediaId ?? null, contactName });
   } else {
     if (!text?.trim()) return;
     await appendMessage(from, { role: 'user', content: text, contactName });

@@ -92,9 +92,22 @@ function formatDate(ts) {
 function MessageBubble({ msg }) {
   const isUser = msg.role === 'user';
   const isAdmin = msg.role === 'admin';
+  const mediaProxyUrl = msg.mediaId ? `${BASE_URL}/api/conversations/media/${msg.mediaId}` : null;
+
   return (
     <div className={`${styles.msg} ${isUser ? styles.msgUser : isAdmin ? styles.msgAdmin : styles.msgBot}`}>
-      <div className={styles.msgBubble}>{msg.content}</div>
+      <div className={styles.msgBubble}>
+        {msg.mediaType === 'image' && mediaProxyUrl && (
+          <img src={mediaProxyUrl} className={styles.msgMedia} alt="Imagen" loading="lazy" />
+        )}
+        {msg.mediaType === 'audio' && mediaProxyUrl && (
+          <audio controls src={mediaProxyUrl} className={styles.msgAudio} />
+        )}
+        {msg.mediaType === 'video' && mediaProxyUrl && (
+          <video controls src={mediaProxyUrl} className={styles.msgVideo} />
+        )}
+        {msg.content && <span>{msg.content}</span>}
+      </div>
       <span className={styles.msgMeta}>
         {isUser ? 'Cliente' : isAdmin ? 'Agente' : 'Gina'}
         {msg.timestamp ? ` · ${formatTime(msg.timestamp)}` : ''}
@@ -168,9 +181,13 @@ export default function Conversations() {
   const [newConvSaving, setNewConvSaving] = useState(false);
   const [newConvError, setNewConvError] = useState('');
   const messagesEndRef = useRef(null);
+  const messagesContainerRef = useRef(null);
+  const atBottomRef = useRef(true);
+  const prevMsgCountRef = useRef(0);
   const pollConvRef = useRef(null);
   const pollMsgRef = useRef(null);
   const selectedIdRef = useRef(null);
+  const mediaInputRef = useRef(null);
 
   const labelMap = Object.fromEntries(allLabels.map(l => [l.name, l.color]));
 
@@ -188,6 +205,8 @@ export default function Conversations() {
     clearInterval(pollMsgRef.current);
     if (!selected) { setMessages([]); setCustomer(null); return; }
     selectedIdRef.current = selected.id;
+    atBottomRef.current = true;
+    prevMsgCountRef.current = 0;
     loadMessages(selected.id);
     loadCustomer(selected.id);
     markRead(selected.id);
@@ -197,9 +216,21 @@ export default function Conversations() {
     return () => clearInterval(pollMsgRef.current);
   }, [selected?.id]);
 
+  // Smart scroll: only auto-scroll when new messages arrive and user is at the bottom
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const newLen = messages.length;
+    const hadMore = newLen > prevMsgCountRef.current;
+    prevMsgCountRef.current = newLen;
+    if (hadMore && atBottomRef.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
   }, [messages]);
+
+  function handleMessagesScroll() {
+    const el = messagesContainerRef.current;
+    if (!el) return;
+    atBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
+  }
 
   async function loadAllLabels() {
     try {
@@ -240,7 +271,14 @@ export default function Conversations() {
     try {
       const r = await authFetch(BASE_URL + '/api/conversations/start', {
         method: 'POST',
-        body: { phone: newPhone.trim(), contactName: newName.trim() || null, templateName: newTemplate.name, language: newTemplate.language, params: newParams },
+        body: {
+          phone: newPhone.trim(),
+          contactName: newName.trim() || null,
+          templateName: newTemplate.name,
+          language: newTemplate.language,
+          params: newParams,
+          createdBy: myId,
+        },
       });
       if (!r.ok) throw new Error((await r.json()).error);
       const conv = await r.json();
@@ -313,50 +351,22 @@ export default function Conversations() {
     } finally { setSyncing(false); }
   }
 
-  async function updateStatus(status) {
+  async function dispatch(action) {
     if (!selected || updating) return;
     setUpdating(true);
     try {
-      const res = await authFetch(BASE_URL + `/api/conversations/${selected.id}/status`, {
+      const r = await authFetch(BASE_URL + `/api/conversations/${selected.id}/dispatch`, {
         method: 'PATCH',
-        body: { status },
+        body: { action },
       });
-      if (res.ok) {
-        const patch = { status };
+      if (r.ok) {
+        const data = await r.json();
+        const patch = {};
+        if (data.status !== undefined) patch.status = data.status;
+        if (data.humanMode !== undefined) patch.humanMode = data.humanMode;
+        if (data.assignedTo !== undefined) patch.assignedTo = data.assignedTo;
         setSelected(prev => ({ ...prev, ...patch }));
         setConversations(prev => prev.map(c => c.id === selected.id ? { ...c, ...patch } : c));
-      }
-    } finally { setUpdating(false); }
-  }
-
-  async function toggleHumanMode() {
-    if (!selected || updating) return;
-    const humanMode = !selected.humanMode;
-    setUpdating(true);
-    try {
-      const res = await authFetch(BASE_URL + `/api/conversations/${selected.id}/mode`, {
-        method: 'PATCH',
-        body: { humanMode },
-      });
-      if (res.ok) {
-        setSelected(prev => ({ ...prev, humanMode }));
-        setConversations(prev => prev.map(c => c.id === selected.id ? { ...c, humanMode } : c));
-      }
-    } finally { setUpdating(false); }
-  }
-
-  async function assignTo(agentId) {
-    if (!selected || updating) return;
-    setUpdating(true);
-    try {
-      const assignedTo = selected.assignedTo === agentId ? null : agentId;
-      const res = await authFetch(BASE_URL + `/api/conversations/${selected.id}/assign`, {
-        method: 'PATCH',
-        body: { assignedTo },
-      });
-      if (res.ok) {
-        setSelected(prev => ({ ...prev, assignedTo }));
-        setConversations(prev => prev.map(c => c.id === selected.id ? { ...c, assignedTo } : c));
       }
     } finally { setUpdating(false); }
   }
@@ -404,16 +414,40 @@ export default function Conversations() {
     } finally { setSending(false); }
   }
 
+  async function handleMediaSelect(e) {
+    const file = e.target.files?.[0];
+    if (!file || !selected) return;
+    e.target.value = '';
+    setSending(true);
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const r = await authFetch(BASE_URL + `/api/conversations/${selected.id}/media`, {
+        method: 'POST',
+        body: form,
+      });
+      await loadMessages(selected.id);
+      if (!r.ok) {
+        const data = await r.json().catch(() => ({}));
+        alert(`⚠️ ${data.error ?? 'Error enviando archivo'}`);
+      }
+    } finally { setSending(false); }
+  }
+
   const myId = agent?.id;
   const otherAgent = myId === 'joaquin' ? 'sofia' : 'joaquin';
 
   const filtered = conversations.filter(c => {
+    const status = c.status || 'bot';
     if (filter === 'bot') {
-      if ((c.status || 'bot') !== 'bot' || c.humanMode) return false;
+      if (status === 'resolved') return false;
+      if (status !== 'bot' || c.humanMode) return false;
     } else if (filter === 'mine') {
+      if (status === 'resolved') return false;
       if (c.assignedTo !== myId) return false;
     } else if (filter === 'urgent') {
-      if ((c.status || 'bot') !== 'urgent') return false;
+      if (status === 'resolved') return false;
+      if (status !== 'urgent') return false;
     } else if (filter === 'all') {
       if (c.assignedTo === otherAgent) return false;
     }
@@ -505,52 +539,65 @@ export default function Conversations() {
         ) : (
           <>
             <div className={styles.threadHeader}>
-              {/* Row 1: name + primary actions */}
+              {/* Row 1: name + resolve/reopen */}
               <div className={styles.threadHeaderTop}>
                 <span className={styles.threadName}>{selected.contactName || selected.contactId}</span>
                 <div className={styles.threadActions}>
-                  {currentStatus !== 'urgent' && (
-                    <button className={`${styles.actionBtn} ${styles.actionUrgent}`} onClick={() => updateStatus('urgent')} disabled={updating}>
-                      Urgente
-                    </button>
-                  )}
                   {currentStatus !== 'resolved' ? (
-                    <button className={`${styles.actionBtn} ${styles.actionResolve}`} onClick={() => updateStatus('resolved')} disabled={updating}>
-                      Resolver
+                    <button className={`${styles.actionBtn} ${styles.actionResolve}`} onClick={() => dispatch('resolved')} disabled={updating}>
+                      ✓ Resolver
                     </button>
                   ) : (
-                    <button className={`${styles.actionBtn} ${styles.actionReopen}`} onClick={() => updateStatus('bot')} disabled={updating}>
-                      Reabrir
+                    <button className={`${styles.actionBtn} ${styles.actionReopen}`} onClick={() => dispatch('to_bot')} disabled={updating}>
+                      ↩ Reabrir
                     </button>
                   )}
-                  <button
-                    className={`${styles.modeBtn} ${isHuman ? styles.modeBtnHuman : ''}`}
-                    onClick={toggleHumanMode}
-                    disabled={updating}
-                  >
-                    {isHuman ? '🤖 Activar bot' : '👤 Tomar control'}
-                  </button>
                 </div>
               </div>
 
-              {/* Row 2: badges + assign + labels */}
+              {/* Row 2: badges + dispatch actions + labels */}
               <div className={styles.threadHeaderBottom}>
                 <div className={styles.threadHeaderBadges}>
                   <ChannelBadge channel={selected.channel} />
                   <StatusChip status={currentStatus} />
                   {selected.assignedTo && <AgentBadge assignedTo={selected.assignedTo} />}
                 </div>
-                {AGENTS.map(a => (
+                <div className={styles.dispatchActions}>
                   <button
-                    key={a.id}
-                    className={`${styles.assignBtn} ${selected.assignedTo === a.id ? styles.assignBtnActive : ''}`}
-                    onClick={() => assignTo(a.id)}
+                    className={`${styles.dispatchBtn} ${styles.dispatchBotBtn} ${!isHuman && currentStatus === 'bot' ? styles.dispatchBtnActive : ''}`}
+                    onClick={() => dispatch('to_bot')}
                     disabled={updating}
-                    title={selected.assignedTo === a.id ? `Quitar de ${a.label}` : `Asignar a ${a.label}`}
+                    title="Enviar al Bot"
                   >
-                    {selected.assignedTo === a.id ? `✓ ${a.label}` : `→ ${a.label}`}
+                    🤖 Bot
                   </button>
-                ))}
+                  <button
+                    className={`${styles.dispatchBtn} ${selected.assignedTo === 'sofia' && isHuman ? styles.dispatchBtnActive : ''}`}
+                    onClick={() => dispatch('to_sofia')}
+                    disabled={updating}
+                    title="Enviar a Mis casos de Sofía"
+                  >
+                    → Sofía
+                  </button>
+                  <button
+                    className={`${styles.dispatchBtn} ${selected.assignedTo === 'joaquin' && isHuman ? styles.dispatchBtnActive : ''}`}
+                    onClick={() => dispatch('to_joaquin')}
+                    disabled={updating}
+                    title="Enviar a Mis casos de Joaquín"
+                  >
+                    → Joaquín
+                  </button>
+                  {currentStatus !== 'urgent' && currentStatus !== 'resolved' && (
+                    <button
+                      className={`${styles.dispatchBtn} ${styles.dispatchUrgentBtn}`}
+                      onClick={() => dispatch('urgent')}
+                      disabled={updating}
+                      title="Marcar como urgente"
+                    >
+                      ⚡ Urgente
+                    </button>
+                  )}
+                </div>
                 <div className={styles.labelsRow}>
                   {(selected.labels ?? []).map(l => (
                     <LabelChip key={l} label={l} labelMap={labelMap} onRemove={removeLabel} />
@@ -587,7 +634,11 @@ export default function Conversations() {
               </div>
             </div>
 
-            <div className={styles.messages}>
+            <div
+              className={styles.messages}
+              ref={messagesContainerRef}
+              onScroll={handleMessagesScroll}
+            >
               {messages.length === 0 ? (
                 <p className={styles.noMessages}>Sin mensajes aún.</p>
               ) : (
@@ -658,6 +709,23 @@ export default function Conversations() {
                       </div>
                     )}
                   </div>
+                  <input
+                    ref={mediaInputRef}
+                    type="file"
+                    accept="image/*,video/*,audio/*"
+                    className={styles.mediaFileInput}
+                    onChange={handleMediaSelect}
+                    disabled={sending}
+                  />
+                  <button
+                    type="button"
+                    className={styles.mediaBtn}
+                    onClick={() => mediaInputRef.current?.click()}
+                    disabled={sending}
+                    title="Enviar imagen / video / audio"
+                  >
+                    📎
+                  </button>
                   <button type="submit" className={styles.replyBtn} disabled={sending || !reply.trim()}>
                     {sending ? '...' : 'Enviar'}
                   </button>
