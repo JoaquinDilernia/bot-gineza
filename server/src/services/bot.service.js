@@ -7,6 +7,7 @@ import {
   updateConversationStatus,
   updateHumanMode,
   updateAssignment,
+  setUrgentFlag,
   addLabelToConversation,
 } from './conversation.service.js';
 import { findOrder, findOrdersByEmail, formatOrderStatus } from './tiendanube.service.js';
@@ -38,9 +39,8 @@ const URGENCY_KEYWORDS = [
   /muy enojad/i, /indignado/i, /hablar con una persona/i, /quiero hablar/i,
 ];
 
-// Detecta el marcador de escalada y retorna { shouldEscalate, assignTo, cleanText }
-// Si el marcador está solo en su línea → borra la línea (nota interna no llega al cliente).
-// Si el marcador está al inicio de la única línea con texto (formato viejo) → solo borra el token.
+const TEN_DAYS_MS = 10 * 24 * 60 * 60 * 1000;
+
 function parseEscalationMarker(text) {
   const MARKERS = [
     { re: /\[ESCALAR_JOAQUIN\]/, assignTo: 'joaquin' },
@@ -49,9 +49,7 @@ function parseEscalationMarker(text) {
   ];
   for (const { re, assignTo } of MARKERS) {
     if (!re.test(text)) continue;
-    // Eliminar la línea entera que contiene el marcador (borra notas internas)
     const withoutLine = text.replace(/^[^\n]*\[ESCALAR(?:_JOAQUIN|_SOFIA)?\][^\n]*\n?/m, '').trim();
-    // Si queda texto → usarlo; si quedó vacío (marcador era toda la respuesta) → solo quitar el token
     const cleanText = withoutLine || text.replace(re, '').trim();
     return { shouldEscalate: true, assignTo, cleanText };
   }
@@ -94,17 +92,19 @@ export async function processIncomingMessage(msg) {
     return;
   }
   const botConfig = configDoc.exists ? configDoc.data() : {};
-  console.log(`[bot] Contexto cargado para ${from} — humanMode: ${conversation.humanMode}`);
+  console.log(`[bot] Contexto cargado para ${from} — humanMode: ${conversation.humanMode}, status: ${conversation.status}`);
 
-  // Auto-reopen resolved conversations when a new message arrives
-  if (conversation.status === 'resolved') {
+  // Auto-reopen archived/resolved conversations when a new message arrives → always goes to bot
+  const isArchived = ['resolved', 'bot_archived'].includes(conversation.status)
+    || conversation.status === 'urgent'; // legacy urgent status
+  if (isArchived && !conversation.humanMode) {
     await Promise.all([
       updateConversationStatus(from, 'bot'),
       updateHumanMode(from, false),
     ]);
     conversation.status = 'bot';
     conversation.humanMode = false;
-    console.log(`[bot] Conversación ${from} reabierta automáticamente`);
+    console.log(`[bot] Conversación ${from} reabierta automáticamente desde '${conversation.status}'`);
   }
 
   if (conversation.humanMode) {
@@ -113,7 +113,7 @@ export async function processIncomingMessage(msg) {
     return;
   }
 
-  // --- Manejo de tipos no-texto ---
+  // --- Non-text type handling ---
   if (type === 'audio') {
     const prevAudios = history.filter(m => m.role === 'user' && m.mediaType === 'audio').length;
     const audioUserMsg = '[Audio recibido]';
@@ -122,7 +122,7 @@ export async function processIncomingMessage(msg) {
     let reply;
     if (prevAudios >= 1) {
       reply = 'Entiendo que preferís los audios — lamentablemente no puedo escucharlos. ¿Querés que te pase con un agente que pueda ayudarte mejor?';
-      await updateConversationStatus(from, 'urgent');
+      await setUrgentFlag(from, true);
     } else {
       reply = 'Hola! Recibí tu audio pero no puedo escucharlo 🎙️ ¿Podés contarme por escrito en qué te ayudo?';
     }
@@ -145,13 +145,12 @@ export async function processIncomingMessage(msg) {
     return;
   }
 
-  // --- Imagen: descargar y pasar a Claude ---
+  // --- Image: download and pass to Claude ---
   let imageData = null;
   if (type === 'image') {
     if (mediaId) {
       imageData = await downloadMediaAsBase64(mediaId).catch(() => null);
     } else if (mediaUrl) {
-      // Instagram da URL directa
       try {
         const axios = (await import('axios')).default;
         const { data: buffer } = await axios.get(mediaUrl, { responseType: 'arraybuffer' });
@@ -165,10 +164,16 @@ export async function processIncomingMessage(msg) {
     await appendMessage(from, { role: 'user', content: text, contactName });
   }
 
+  // Detect urgency keywords and flag (as urgent flag, not status change)
   const isUrgent = text && URGENCY_KEYWORDS.some(re => re.test(text));
-  if (isUrgent && conversation.status === 'bot') {
-    updateConversationStatus(from, 'urgent').catch(() => {});
+  if (isUrgent && !conversation.urgent) {
+    setUrgentFlag(from, true).catch(() => {});
   }
+
+  // Check if this is a reopened conversation within 10 days (for context injection)
+  const isRecent = conversation.updatedAt
+    ? (Date.now() - (conversation.updatedAt._seconds ? conversation.updatedAt._seconds * 1000 : new Date(conversation.updatedAt).getTime())) < TEN_DAYS_MS
+    : false;
 
   const orderInfo = await resolveOrderContext(text ?? '');
   const customerContext = buildCustomerContext(customer);
@@ -187,6 +192,7 @@ export async function processIncomingMessage(msg) {
     availableLabels: availableLabels.map(l => l.name),
     botConfig,
     imageData,
+    isReopened: isRecent && history.length > 0,
   });
   console.log(`[bot] Claude respondió (${botReply.length} chars) para ${from}`);
 
@@ -214,8 +220,9 @@ export async function processIncomingMessage(msg) {
     await Promise.all(updates);
     console.log(`[bot] Escalando ${from} → agente: ${assignTo ?? 'sin asignar'}`);
   } else if (shouldClose) {
-    await updateConversationStatus(from, 'resolved');
-    console.log(`[bot] Conversación ${from} cerrada por el bot`);
+    // Bot considers case resolved: archive as bot_archived
+    await updateConversationStatus(from, 'bot_archived');
+    console.log(`[bot] Conversación ${from} archivada por el bot`);
   }
 
   if (channel === 'whatsapp') {
@@ -243,7 +250,6 @@ export async function processIncomingMessage(msg) {
 async function resolveOrderContext(text) {
   const trimmed = text.trim();
 
-  // Búsqueda por email
   if (trimmed.includes('@')) {
     const orders = await findOrdersByEmail(trimmed);
     if (orders.length) {

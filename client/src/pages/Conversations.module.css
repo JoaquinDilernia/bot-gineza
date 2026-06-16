@@ -1312,3 +1312,294 @@
 }
 
 .newConvSubmitBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ==================== STATUS CHIPS (new) ==================== */
+.chip_bot_archived { background: #f3f4f6; color: #6b7280; }
+.chip_archived     { background: #f3f4f6; color: #6b7280; }
+
+/* ==================== URGENT FLAG BADGE ==================== */
+.urgentFlagBadge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--color-status-urgent);
+  flex-shrink: 0;
+}
+
+/* ==================== INSISTENT CLIENT ==================== */
+.insistentBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fef3c7;
+  border: 1px solid #f59e0b;
+  font-size: 9px;
+  flex-shrink: 0;
+  title: "Cliente insistente";
+}
+
+/* ==================== WAIT TIME ==================== */
+.waitTimeBadge {
+  font-size: 10px;
+  color: var(--color-status-urgent);
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+/* ==================== MESSAGE DELIVERY STATUS ==================== */
+.msgStatus {
+  font-size: 10px;
+  color: var(--color-text-faint);
+  margin-left: 4px;
+}
+.msgStatusError {
+  color: #ef4444;
+  font-weight: 600;
+}
+
+.msgBubbleError {
+  background: #fef2f2 !important;
+  color: #991b1b !important;
+  border-color: #fca5a5 !important;
+}
+
+/* ==================== 24H WINDOW WARNING ==================== */
+.windowWarning {
+  margin: 0 var(--space-5) var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  background: #fef3c7;
+  border: 1px solid #f59e0b;
+  border-radius: var(--radius-md);
+  font-size: 11px;
+  color: #92400e;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+/* ==================== TAKE OVER BUTTON ==================== */
+.takeOverBtn {
+  height: 26px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: 700;
+  background: #f0fdf4;
+  color: #16a34a;
+  border: 1px solid #16a34a;
+  transition: all var(--transition-fast);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.takeOverBtn:hover:not(:disabled) {
+  background: #16a34a;
+  color: #fff;
+}
+.takeOverBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ==================== UNURGENT BUTTON ==================== */
+.dispatchUnurgentBtn {
+  background: var(--color-status-urgent-bg);
+  color: var(--color-status-urgent);
+  border-color: var(--color-status-urgent);
+  text-decoration: line-through;
+  opacity: 0.8;
+}
+.dispatchUnurgentBtn:hover:not(:disabled) {
+  background: var(--color-status-urgent);
+  color: #fff;
+  opacity: 1;
+  text-decoration: none;
+}
+
+/* ==================== ARCHIVED CONV BANNER ==================== */
+.archivedBanner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-5);
+  background: #f3f4f6;
+  border-top: 1px solid var(--color-border);
+  flex-shrink: 0;
+  font-size: 11px;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+/* ==================== ITEM INDICATORS ROW ==================== */
+.itemIndicators {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+/* ==================== WINDOW EXPIRED PANEL ==================== */
+.windowExpiredPanel {
+  flex-shrink: 0;
+  border-top: 2px solid #f59e0b;
+  background: #fffbeb;
+  padding: var(--space-4) var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.windowExpiredHeader {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.windowExpiredIcon {
+  font-size: 22px;
+  flex-shrink: 0;
+  line-height: 1;
+  margin-top: 2px;
+}
+
+.windowExpiredTitle {
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+  color: #92400e;
+  margin: 0 0 3px;
+}
+
+.windowExpiredDesc {
+  font-size: var(--font-size-xs);
+  color: #78350f;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.openTemplateSendBtn {
+  align-self: flex-start;
+  height: 34px;
+  padding: 0 var(--space-4);
+  background: #f59e0b;
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+.openTemplateSendBtn:hover { background: #d97706; }
+
+.templateSendForm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  border-top: 1px solid #fcd34d;
+  padding-top: var(--space-3);
+}
+
+.templateSendSelect {
+  height: 36px;
+  padding: 0 var(--space-3);
+  border: 1px solid #fcd34d;
+  border-radius: var(--radius-md);
+  background: #fff;
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+  outline: none;
+  cursor: pointer;
+}
+.templateSendSelect:focus { border-color: #f59e0b; }
+
+.templatePreviewInChat {
+  background: #fff;
+  border: 1px solid #fcd34d;
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+}
+
+.templatePreviewText {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  margin: 0;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.templateParamRow {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.templateParamLabel {
+  font-size: var(--font-size-xs);
+  color: #92400e;
+  font-weight: 600;
+  font-family: monospace;
+}
+
+.templateParamInput {
+  height: 32px;
+  padding: 0 var(--space-2);
+  border: 1px solid #fcd34d;
+  border-radius: var(--radius-sm);
+  background: #fff;
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+  outline: none;
+}
+.templateParamInput:focus { border-color: #f59e0b; }
+
+.templateSendError {
+  font-size: var(--font-size-xs);
+  color: #dc2626;
+  margin: 0;
+}
+
+.templateSendActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.templateSendCancelBtn {
+  height: 32px;
+  padding: 0 var(--space-3);
+  background: none;
+  border: 1px solid #fcd34d;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  color: #92400e;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+.templateSendCancelBtn:hover { background: #fef3c7; }
+
+.templateSendSubmitBtn {
+  height: 32px;
+  padding: 0 var(--space-4);
+  background: #f59e0b;
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+.templateSendSubmitBtn:hover:not(:disabled) { background: #d97706; }
+.templateSendSubmitBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ==================== NO APPROVED TEMPLATES WARNING ==================== */
+.noApprovedWarning {
+  font-size: var(--font-size-xs);
+  color: #92400e;
+  background: #fef3c7;
+  border: 1px solid #fcd34d;
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+}

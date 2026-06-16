@@ -3,6 +3,7 @@ import { authFetch, BASE_URL } from '../lib/api';
 import styles from './Templates.module.css';
 
 const CATEGORIES = ['UTILITY', 'MARKETING', 'AUTHENTICATION'];
+const STATUS_ICONS = { APPROVED: '✓', PENDING: '⏳', REJECTED: '✗', PAUSED: '⏸' };
 const LANGUAGES = [
   { code: 'es_AR', label: 'Español (AR)' },
   { code: 'es_MX', label: 'Español (MX)' },
@@ -70,9 +71,14 @@ export default function Templates() {
         method: 'POST',
         body: { name: name.trim(), displayName: displayName.trim() || name.trim(), bodyText: bodyText.trim(), language, category, params },
       });
-      if (!r.ok) throw new Error((await r.json()).error);
+      const body = await r.json();
+      if (!r.ok) throw new Error(body.error);
       setShowModal(false);
       await load();
+      // If the template was saved locally but Meta rejected the submission, warn the user
+      if (body.metaSubmitError) {
+        setSyncMsg(`Plantilla guardada, pero Meta rechazó el envío: ${body.metaSubmitError}. Podés crearla manualmente en Meta Business Manager y luego sincronizar.`);
+      }
     } catch (err) {
       setError(err.message);
     } finally {
@@ -85,6 +91,11 @@ export default function Templates() {
     setTemplates(prev => prev.filter(t => t.id !== id));
   }
 
+  const statsApproved = templates.filter(t => t.metaStatus === 'APPROVED').length;
+  const statsPending  = templates.filter(t => t.metaStatus === 'PENDING').length;
+  const statsRejected = templates.filter(t => t.metaStatus === 'REJECTED').length;
+  const statsUnknown  = templates.filter(t => !t.metaStatus).length;
+
   return (
     <div className={styles.page}>
       <div className={styles.header}>
@@ -96,7 +107,7 @@ export default function Templates() {
         </div>
         <div className={styles.headerActions}>
           <button className={styles.syncBtn} onClick={handleSync} disabled={syncing} title="Sincronizar estados con Meta">
-            {syncing ? '...' : '↻ Sincronizar'}
+            {syncing ? 'Sincronizando...' : '↻ Sincronizar con Meta'}
           </button>
           {syncMsg && <span className={styles.syncMsg}>{syncMsg}</span>}
           <button className={styles.newBtn} onClick={openModal}>+ Nueva plantilla</button>
@@ -107,52 +118,85 @@ export default function Templates() {
         {templates.length === 0 ? (
           <p className={styles.empty}>No hay plantillas guardadas todavía.</p>
         ) : (
-          <table className={styles.table}>
-            <thead>
-              <tr>
-                <th className={styles.th}>NOMBRE TÉC.</th>
-                <th className={styles.th}>DISPLAY NAME</th>
-                <th className={styles.th}>IDIOMA</th>
-                <th className={styles.th}>CATEGORÍA</th>
-                <th className={styles.th}>ESTADO</th>
-                <th className={styles.th}>PARÁMETROS</th>
-                <th className={styles.th}>PREVIEW</th>
-                <th className={styles.th}></th>
-              </tr>
-            </thead>
-            <tbody>
-              {templates.map(t => (
-                <tr key={t.id} className={styles.tr}>
-                  <td className={styles.td}>
-                    <span className={styles.nameBadge}>{t.name}</span>
-                  </td>
-                  <td className={styles.td}>
-                    <span className={styles.displayName}>{t.displayName}</span>
-                  </td>
-                  <td className={styles.td}>
-                    <span className={styles.meta}>{t.language}</span>
-                  </td>
-                  <td className={styles.td}>
-                    <span className={`${styles.catBadge} ${styles[`cat_${t.category}`]}`}>{t.category}</span>
-                  </td>
-                  <td className={styles.td}>
-                    {t.metaStatus && (
-                      <span className={`${styles.statusBadge} ${styles[`status_${t.metaStatus}`]}`}>{t.metaStatus}</span>
-                    )}
-                  </td>
-                  <td className={styles.td}>
-                    <span className={styles.meta}>{t.params?.length ?? 0}</span>
-                  </td>
-                  <td className={styles.tdPreview}>
-                    <span className={styles.preview}>{t.bodyText}</span>
-                  </td>
-                  <td className={styles.tdAction}>
-                    <button className={styles.deleteBtn} onClick={() => handleDelete(t.id)} title="Eliminar">×</button>
-                  </td>
+          <>
+            {/* Status summary bar */}
+            <div className={styles.statusSummary}>
+              <span className={`${styles.statusCount} ${styles.statusCount_approved}`}>
+                ✓ {statsApproved} aprobada{statsApproved !== 1 ? 's' : ''}
+              </span>
+              {statsPending > 0 && (
+                <span className={`${styles.statusCount} ${styles.statusCount_pending}`}>
+                  ⏳ {statsPending} pendiente{statsPending !== 1 ? 's' : ''}
+                </span>
+              )}
+              {statsRejected > 0 && (
+                <span className={`${styles.statusCount} ${styles.statusCount_rejected}`}>
+                  ✗ {statsRejected} rechazada{statsRejected !== 1 ? 's' : ''}
+                </span>
+              )}
+              {statsUnknown > 0 && (
+                <span className={`${styles.statusCount} ${styles.statusCount_unknown}`}>
+                  ? {statsUnknown} sin sincronizar
+                </span>
+              )}
+              {(statsPending > 0 || statsRejected > 0 || statsUnknown > 0) && (
+                <span className={styles.syncHint}>Usá "Sincronizar con Meta" para actualizar los estados.</span>
+              )}
+            </div>
+
+            <table className={styles.table}>
+              <thead>
+                <tr>
+                  <th className={styles.th}>NOMBRE TÉC.</th>
+                  <th className={styles.th}>DISPLAY NAME</th>
+                  <th className={styles.th}>IDIOMA</th>
+                  <th className={styles.th}>CATEGORÍA</th>
+                  <th className={styles.th}>ESTADO META</th>
+                  <th className={styles.th}>PARAMS</th>
+                  <th className={styles.th}>PREVIEW</th>
+                  <th className={styles.th}></th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {templates.map(t => (
+                  <tr
+                    key={t.id}
+                    className={`${styles.tr} ${t.metaStatus ? styles[`tr_${t.metaStatus}`] : styles.tr_unknown}`}
+                  >
+                    <td className={styles.td}>
+                      <span className={styles.nameBadge}>{t.name}</span>
+                    </td>
+                    <td className={styles.td}>
+                      <span className={styles.displayName}>{t.displayName}</span>
+                    </td>
+                    <td className={styles.td}>
+                      <span className={styles.meta}>{t.language}</span>
+                    </td>
+                    <td className={styles.td}>
+                      <span className={`${styles.catBadge} ${styles[`cat_${t.category}`]}`}>{t.category}</span>
+                    </td>
+                    <td className={styles.td}>
+                      <span className={`${styles.statusBadge} ${t.metaStatus ? styles[`status_${t.metaStatus}`] : styles.status_unknown}`}>
+                        {t.metaStatus ? `${STATUS_ICONS[t.metaStatus] ?? '?'} ${t.metaStatus}` : '? Sin sincronizar'}
+                      </span>
+                      {t.metaSubmitError && (
+                        <span className={styles.metaSubmitError} title={t.metaSubmitError}>⚠ error al enviar</span>
+                      )}
+                    </td>
+                    <td className={styles.td}>
+                      <span className={styles.meta}>{t.params?.length ?? 0}</span>
+                    </td>
+                    <td className={styles.tdPreview}>
+                      <span className={styles.preview}>{t.bodyText}</span>
+                    </td>
+                    <td className={styles.tdAction}>
+                      <button className={styles.deleteBtn} onClick={() => handleDelete(t.id)} title="Eliminar">×</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
         )}
       </div>
 

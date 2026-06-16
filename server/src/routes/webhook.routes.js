@@ -1,13 +1,15 @@
 import { Router } from 'express';
-import { verifyWebhookSignature, parseWhatsAppMessage, parseInstagramMessage } from '../services/meta.service.js';
+import {
+  verifyWebhookSignature,
+  parseWhatsAppMessage,
+  parseInstagramMessage,
+  parseWhatsAppStatusUpdate,
+} from '../services/meta.service.js';
 import { processIncomingMessage } from '../services/bot.service.js';
+import { updateMessageStatusByWaMsgId } from '../services/conversation.service.js';
 
 const router = Router();
 
-/**
- * GET /api/webhook
- * Verificación inicial del webhook por Meta.
- */
 router.get('/', (req, res) => {
   const mode = req.query['hub.mode'];
   const token = req.query['hub.verify_token'];
@@ -22,19 +24,14 @@ router.get('/', (req, res) => {
   return res.sendStatus(403);
 });
 
-/**
- * POST /api/webhook
- * Recibe mensajes de WhatsApp e Instagram.
- */
 router.post('/', async (req, res) => {
-  // Verificar firma para seguridad
   const signature = req.headers['x-hub-signature-256'];
   if (!verifyWebhookSignature(req.body, signature)) {
     console.warn('[webhook] Firma inválida, request rechazado');
     return res.sendStatus(401);
   }
 
-  // Responder 200 inmediatamente (Meta requiere respuesta rápida)
+  // Respond 200 immediately (Meta requires fast response)
   res.sendStatus(200);
 
   try {
@@ -42,6 +39,22 @@ router.post('/', async (req, res) => {
     const object = body.object;
 
     if (object === 'whatsapp_business_account') {
+      // Handle delivery status updates
+      const statusUpdate = parseWhatsAppStatusUpdate(body);
+      if (statusUpdate) {
+        const { waMsgId, status } = statusUpdate;
+        // Map WA statuses to our internal statuses
+        // 'sent' → 'sent', 'delivered' → 'delivered', 'read' → 'read', 'failed' → 'error'
+        const mapped = status === 'failed' ? 'error' : status;
+        if (['delivered', 'read', 'error'].includes(mapped)) {
+          updateMessageStatusByWaMsgId(waMsgId, mapped).catch(err =>
+            console.error('[webhook] Error actualizando estado de mensaje:', err.message)
+          );
+        }
+        return;
+      }
+
+      // Handle incoming messages
       const msg = parseWhatsAppMessage(body);
       if (msg) {
         console.log(`[webhook] WPP entrante de ${msg.from}: ${msg.text?.substring(0, 50)}`);

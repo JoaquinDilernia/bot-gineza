@@ -35,6 +35,7 @@ export default function Costs() {
   const [month, setMonth] = useState(currentMonth());
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
   const isCurrentMonth = month === currentMonth();
 
   useEffect(() => {
@@ -44,9 +45,17 @@ export default function Costs() {
   async function load() {
     setLoading(true);
     setData(null);
+    setError(null);
     try {
       const r = await authFetch(`${BASE_URL}/api/costs?month=${month}`);
-      if (r.ok) setData(await r.json());
+      if (r.ok) {
+        setData(await r.json());
+      } else {
+        const body = await r.json().catch(() => ({}));
+        setError(body.error || `Error ${r.status}`);
+      }
+    } catch (err) {
+      setError('No se pudo conectar con el servidor: ' + err.message);
     } finally {
       setLoading(false);
     }
@@ -72,7 +81,14 @@ export default function Costs() {
 
       {loading && <p className={styles.loading}>Cargando...</p>}
 
-      {!loading && data && (
+      {!loading && error && (
+        <div className={styles.errorBanner}>
+          <span>⚠️ {error}</span>
+          <button className={styles.retryBtn} onClick={load}>Reintentar</button>
+        </div>
+      )}
+
+      {!loading && !error && data && (
         <div className={styles.grid}>
 
           {/* Claude */}

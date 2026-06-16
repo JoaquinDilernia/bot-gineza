@@ -16,8 +16,10 @@ export async function closeInactiveConversations() {
   const cutoff = new Date();
   cutoff.setHours(cutoff.getHours() - inactiveHours);
 
+  // Only close active bot conversations (not already archived, not in human mode)
   const snap = await db.collection('conversations')
     .where('status', '==', 'bot')
+    .where('humanMode', '==', false)
     .get();
 
   const staleDocs = snap.docs.filter(doc => {
@@ -40,8 +42,9 @@ export async function closeInactiveConversations() {
         await sendInstagramMessage(contactId, farewellMsg);
       }
 
-      await updateConversationStatus(contactId, 'resolved');
-      console.log(`[inactivity] Cerrada ${contactId} (${data.channel})`);
+      // Archive as bot_archived (distinct from agent-resolved)
+      await updateConversationStatus(contactId, 'bot_archived');
+      console.log(`[inactivity] Archivada ${contactId} (${data.channel}) → bot_archived`);
     } catch (err) {
       console.error(`[inactivity] Error cerrando ${contactId}:`, err.message);
     }

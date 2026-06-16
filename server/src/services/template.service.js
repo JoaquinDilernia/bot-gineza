@@ -1,5 +1,5 @@
 import { getDb } from './firebase.service.js';
-import { fetchMetaTemplateStatuses } from './meta.service.js';
+import { fetchMetaTemplateStatuses, createMetaTemplate } from './meta.service.js';
 
 const COLLECTION = 'whatsapp_templates';
 
@@ -10,15 +10,39 @@ export async function getAllTemplates() {
 }
 
 export async function createTemplate({ name, displayName, bodyText, language, category, params }) {
+  const cleanName = name.trim();
+  const cleanLanguage = language?.trim() || 'es_AR';
+  const cleanParams = Array.isArray(params) ? params : [];
+
+  // Submit to Meta for approval — errors are surfaced so the caller can inform the user
+  let metaStatus = 'PENDING';
+  let metaSubmitError = null;
+  try {
+    const result = await createMetaTemplate({
+      name: cleanName,
+      language: cleanLanguage,
+      category: category || 'UTILITY',
+      bodyText: bodyText.trim(),
+      params: cleanParams,
+    });
+    metaStatus = result.status ?? 'PENDING';
+  } catch (err) {
+    const detail = err.response?.data?.error?.message ?? err.message;
+    console.error('[template] Error submitting to Meta:', detail);
+    metaSubmitError = detail;
+    // Don't throw — still save locally so agent knows the template exists
+  }
+
   const db = getDb();
   const doc = await db.collection(COLLECTION).add({
-    name: name.trim(),
+    name: cleanName,
     displayName: displayName.trim(),
     bodyText: bodyText.trim(),
-    language: language?.trim() || 'es_AR',
+    language: cleanLanguage,
     category: category || 'UTILITY',
-    params: Array.isArray(params) ? params : [],
-    metaStatus: 'PENDING',
+    params: cleanParams,
+    metaStatus,
+    metaSubmitError: metaSubmitError ?? null,
     createdAt: new Date(),
   });
   const snap = await doc.get();

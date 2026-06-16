@@ -10,11 +10,13 @@ const AGENTS = [
 ];
 
 const STATUS_CONFIG = {
-  bot:       { label: 'Bot activo',  cls: 'bot' },
-  urgent:    { label: 'Urgente',     cls: 'urgent' },
-  waiting:   { label: 'En espera',   cls: 'waiting' },
-  escalated: { label: 'Derivado',    cls: 'escalated' },
-  resolved:  { label: 'Resuelto',    cls: 'resolved' },
+  bot:          { label: 'Bot activo',    cls: 'bot' },
+  escalated:    { label: 'Con agente',    cls: 'escalated' },
+  bot_archived: { label: 'Archivado Bot', cls: 'bot_archived' },
+  resolved:     { label: 'Cerrado',       cls: 'resolved' },
+  // Legacy
+  urgent:       { label: 'Urgente',       cls: 'urgent' },
+  waiting:      { label: 'En espera',     cls: 'waiting' },
 };
 
 const CHANNEL_CONFIG = {
@@ -23,10 +25,11 @@ const CHANNEL_CONFIG = {
 };
 
 const FILTERS = [
-  { value: 'bot',    label: 'Bot' },
-  { value: 'mine',   label: 'Mis casos' },
-  { value: 'urgent', label: 'Urgentes' },
-  { value: 'all',    label: 'Todas' },
+  { value: 'bot',      label: 'Bot' },
+  { value: 'mine',     label: 'Mis casos' },
+  { value: 'urgent',   label: 'Urgentes' },
+  { value: 'all',      label: 'Todas' },
+  { value: 'archived', label: 'Archivos' },
 ];
 
 function StatusChip({ status }) {
@@ -60,10 +63,15 @@ function LabelChip({ label, labelMap, onRemove }) {
   );
 }
 
-function formatAge(ts) {
-  if (!ts) return '';
+function tsToDate(ts) {
+  if (!ts) return null;
   const d = ts._seconds ? new Date(ts._seconds * 1000) : new Date(ts);
-  if (isNaN(d)) return '';
+  return isNaN(d) ? null : d;
+}
+
+function formatAge(ts) {
+  const d = tsToDate(ts);
+  if (!d) return '';
   const diffMs = Date.now() - d.getTime();
   const diffH = Math.floor(diffMs / (1000 * 60 * 60));
   if (diffH < 1) {
@@ -75,28 +83,42 @@ function formatAge(ts) {
 }
 
 function formatTime(ts) {
-  if (!ts) return '';
-  const d = ts._seconds ? new Date(ts._seconds * 1000) : new Date(ts);
-  if (isNaN(d)) return '';
+  const d = tsToDate(ts);
+  if (!d) return '';
   return d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
 }
 
 function formatDate(ts) {
-  if (!ts) return '';
-  try {
-    const d = ts._seconds ? new Date(ts._seconds * 1000) : new Date(ts);
-    return d.toLocaleDateString('es-AR');
-  } catch { return ''; }
+  const d = tsToDate(ts);
+  if (!d) return '';
+  return d.toLocaleDateString('es-AR');
+}
+
+function hoursAgo(ts) {
+  const d = tsToDate(ts);
+  if (!d) return 0;
+  return (Date.now() - d.getTime()) / (1000 * 60 * 60);
+}
+
+// Delivery status icon for agent messages
+function MsgStatusIcon({ msgStatus }) {
+  if (!msgStatus || msgStatus === 'sent') return <span className={styles.msgStatus}>✓</span>;
+  if (msgStatus === 'sending') return <span className={styles.msgStatus}>⏳</span>;
+  if (msgStatus === 'delivered') return <span className={styles.msgStatus}>✓✓</span>;
+  if (msgStatus === 'read') return <span className={`${styles.msgStatus}`} style={{ color: '#3b82f6' }}>✓✓</span>;
+  if (msgStatus === 'error') return <span className={`${styles.msgStatus} ${styles.msgStatusError}`}>✗ No enviado</span>;
+  return null;
 }
 
 function MessageBubble({ msg }) {
   const isUser = msg.role === 'user';
   const isAdmin = msg.role === 'admin';
   const mediaProxyUrl = msg.mediaId ? `${BASE_URL}/api/conversations/media/${msg.mediaId}` : null;
+  const isError = isAdmin && msg.msgStatus === 'error';
 
   return (
     <div className={`${styles.msg} ${isUser ? styles.msgUser : isAdmin ? styles.msgAdmin : styles.msgBot}`}>
-      <div className={styles.msgBubble}>
+      <div className={`${styles.msgBubble} ${isError ? styles.msgBubbleError : ''}`}>
         {msg.mediaType === 'image' && mediaProxyUrl && (
           <img src={mediaProxyUrl} className={styles.msgMedia} alt="Imagen" loading="lazy" />
         )}
@@ -111,12 +133,17 @@ function MessageBubble({ msg }) {
       <span className={styles.msgMeta}>
         {isUser ? 'Cliente' : isAdmin ? 'Agente' : 'Gina'}
         {msg.timestamp ? ` · ${formatTime(msg.timestamp)}` : ''}
+        {isAdmin && <MsgStatusIcon msgStatus={msg.msgStatus} />}
       </span>
     </div>
   );
 }
 
 function ConvItem({ conv, active, onClick, labelMap }) {
+  const isUrgent = conv.urgent;
+  const isInsistent = (conv.consecutiveClientMessages ?? 0) >= 3;
+  const isWaiting = (conv.consecutiveClientMessages ?? 0) > 0 && conv.lastClientMessageAt;
+
   return (
     <button
       className={`${styles.item} ${active ? styles.itemActive : ''}`}
@@ -125,6 +152,11 @@ function ConvItem({ conv, active, onClick, labelMap }) {
       <div className={styles.itemTop}>
         <span className={styles.itemName}>{conv.contactName || conv.contactId}</span>
         <div className={styles.itemTopRight}>
+          <div className={styles.itemIndicators}>
+            {isUrgent && <span className={styles.urgentFlagBadge} title="Urgente">⚡</span>}
+            {isInsistent && <span className={styles.insistentBadge} title="Cliente insistente — escribió varias veces sin respuesta">⚠</span>}
+            {isWaiting && <span className={styles.waitTimeBadge} title="Tiempo esperando respuesta">⏳{formatAge(conv.lastClientMessageAt)}</span>}
+          </div>
           {conv.updatedAt && <span className={styles.itemAge}>{formatAge(conv.updatedAt)}</span>}
           {conv.unread > 0 && <span className={styles.itemUnread}>{conv.unread}</span>}
         </div>
@@ -182,6 +214,12 @@ export default function Conversations() {
   const [newConvError, setNewConvError] = useState('');
   const [summary, setSummary] = useState(null);
   const [summaryGenerating, setSummaryGenerating] = useState(false);
+  const [apiWindowError, setApiWindowError] = useState(false);
+  const [templateSendOpen, setTemplateSendOpen] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState(null);
+  const [templateParams, setTemplateParams] = useState([]);
+  const [sendingTemplate, setSendingTemplate] = useState(false);
+  const [templateSendError, setTemplateSendError] = useState('');
   const messagesEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
   const atBottomRef = useRef(true);
@@ -192,6 +230,8 @@ export default function Conversations() {
   const mediaInputRef = useRef(null);
 
   const labelMap = Object.fromEntries(allLabels.map(l => [l.name, l.color]));
+  const myId = agent?.id;
+  const otherAgent = myId === 'joaquin' ? 'sofia' : 'joaquin';
 
   useNotifications(conversations);
 
@@ -215,11 +255,16 @@ export default function Conversations() {
     markRead(selected.id);
     setLabelDropOpen(false);
     setQrOpen(false);
+    // Reset window state when switching conversations
+    setApiWindowError(false);
+    setTemplateSendOpen(false);
+    setSelectedTemplate(null);
+    setTemplateParams([]);
+    setTemplateSendError('');
     pollMsgRef.current = setInterval(() => loadMessages(selectedIdRef.current), 5000);
     return () => clearInterval(pollMsgRef.current);
   }, [selected?.id]);
 
-  // Smart scroll: only auto-scroll when new messages arrive and user is at the bottom
   useEffect(() => {
     const newLen = messages.length;
     const hadMore = newLen > prevMsgCountRef.current;
@@ -288,6 +333,7 @@ export default function Conversations() {
       setShowNewConvModal(false);
       await loadConversations();
       setSelected(conv);
+      setFilter('mine');
     } catch (err) {
       setNewConvError(err.message);
     } finally {
@@ -371,20 +417,22 @@ export default function Conversations() {
     } finally { setSyncing(false); }
   }
 
-  async function dispatch(action) {
+  // dispatch supports extra body params (e.g. agentId for take_over)
+  async function dispatch(action, extra = {}) {
     if (!selected || updating) return;
     setUpdating(true);
     try {
       const r = await authFetch(BASE_URL + `/api/conversations/${selected.id}/dispatch`, {
         method: 'PATCH',
-        body: { action },
+        body: { action, ...extra },
       });
       if (r.ok) {
         const data = await r.json();
         const patch = {};
-        if (data.status !== undefined) patch.status = data.status;
-        if (data.humanMode !== undefined) patch.humanMode = data.humanMode;
+        if (data.status !== undefined)    patch.status = data.status;
+        if (data.humanMode !== undefined)  patch.humanMode = data.humanMode;
         if (data.assignedTo !== undefined) patch.assignedTo = data.assignedTo;
+        if (data.urgent !== undefined)     patch.urgent = data.urgent;
         setSelected(prev => ({ ...prev, ...patch }));
         setConversations(prev => prev.map(c => c.id === selected.id ? { ...c, ...patch } : c));
       }
@@ -419,19 +467,63 @@ export default function Conversations() {
     e.preventDefault();
     if (!reply.trim() || !selected || sending) return;
     setSending(true);
+    const text = reply.trim();
+    setReply('');
     try {
       const res = await authFetch(BASE_URL + `/api/conversations/${selected.id}/reply`, {
         method: 'POST',
-        body: { message: reply.trim() },
+        body: { message: text },
       });
       await loadMessages(selected.id);
-      if (res.ok) {
-        setReply('');
-      } else {
+      if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        alert(`⚠️ Mensaje guardado en el panel pero NO llegó al cliente.\n${data.error ?? 'Error desconocido'}`);
+        if (data.windowExpired) {
+          setApiWindowError(true);
+          if (templates.length === 0) loadTemplates();
+        } else {
+          alert(`⚠️ Mensaje guardado en el panel pero NO llegó al cliente.\n${data.error ?? 'Error desconocido'}`);
+        }
       }
     } finally { setSending(false); }
+  }
+
+  async function sendTemplate() {
+    if (!selected || !selectedTemplate || sendingTemplate) return;
+    setSendingTemplate(true);
+    setTemplateSendError('');
+    try {
+      const res = await authFetch(BASE_URL + `/api/conversations/${selected.id}/send-template`, {
+        method: 'POST',
+        body: { templateName: selectedTemplate.name, language: selectedTemplate.language, params: templateParams },
+      });
+      await loadMessages(selected.id);
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setTemplateSendError(data.error ?? 'Error enviando plantilla');
+      } else {
+        setTemplateSendOpen(false);
+        setSelectedTemplate(null);
+        setTemplateParams([]);
+        setTemplateSendError('');
+        // Don't clear apiWindowError yet — window only reopens when client replies
+      }
+    } finally {
+      setSendingTemplate(false);
+    }
+  }
+
+  function openTemplatePanel() {
+    if (templates.length === 0) loadTemplates();
+    setTemplateSendOpen(true);
+    setSelectedTemplate(null);
+    setTemplateParams([]);
+    setTemplateSendError('');
+  }
+
+  function pickTemplate(id) {
+    const tpl = templates.find(t => t.id === id) ?? null;
+    setSelectedTemplate(tpl);
+    setTemplateParams(tpl?.params?.map(() => '') ?? []);
   }
 
   async function handleMediaSelect(e) {
@@ -454,23 +546,54 @@ export default function Conversations() {
     } finally { setSending(false); }
   }
 
-  const myId = agent?.id;
-  const otherAgent = myId === 'joaquin' ? 'sofia' : 'joaquin';
+  const isHuman = selected?.humanMode;
+  const currentStatus = selected?.status || 'bot';
+  const isArchived = currentStatus === 'bot_archived' || currentStatus === 'resolved';
+  const isUrgentFlag = selected?.urgent === true;
+  const availableToAdd = allLabels.filter(l => !(selected?.labels ?? []).includes(l.name));
+
+  const slashMatch = reply.match(/^\/(\w*)$/);
+  const slashSuggestions = slashMatch
+    ? quickReplies.filter(qr => (qr.shortcut ?? '').startsWith(slashMatch[1]))
+    : [];
+
+  // 24h WhatsApp window detection
+  const lastClientHours = selected?.lastClientMessageAt
+    ? hoursAgo(selected.lastClientMessageAt)
+    : null;
+  // Computed: client hasn't written in >24h (window likely expired)
+  const computedWindowExpired = isHuman && lastClientHours !== null && lastClientHours > 24;
+  // Combined: either computed from timestamp OR detected from API error response
+  const isWindowExpired = computedWindowExpired || apiWindowError;
+  // Clear apiWindowError when the window re-opens (client responds and lastClientHours resets)
+  if (apiWindowError && !computedWindowExpired && lastClientHours !== null && lastClientHours < 1) {
+    setApiWindowError(false);
+  }
+
+  const approvedTemplates = templates.filter(t => t.metaStatus === 'APPROVED');
 
   const filtered = conversations.filter(c => {
     const status = c.status || 'bot';
+    const isConvArchived = status === 'bot_archived' || status === 'resolved';
+    const convUrgent = c.urgent === true;
+    const convHuman = c.humanMode === true;
+
     if (filter === 'bot') {
-      if (status === 'resolved') return false;
-      if (status !== 'bot' || c.humanMode) return false;
+      if (isConvArchived) return false;
+      if (convHuman) return false;
+      if (status !== 'bot') return false;
     } else if (filter === 'mine') {
-      if (status === 'resolved') return false;
-      if (c.assignedTo !== myId) return false;
+      if (isConvArchived) return false;
+      if (!convHuman || c.assignedTo !== myId) return false;
     } else if (filter === 'urgent') {
-      if (status === 'resolved') return false;
-      if (status !== 'urgent') return false;
+      if (isConvArchived) return false;
+      if (!convUrgent) return false;
     } else if (filter === 'all') {
-      if (c.assignedTo === otherAgent) return false;
+      if (isConvArchived) return false;
+    } else if (filter === 'archived') {
+      if (!isConvArchived) return false;
     }
+
     if (labelFilter && !(c.labels ?? []).includes(labelFilter)) return false;
     if (search) {
       const q = search.toLowerCase();
@@ -479,15 +602,6 @@ export default function Conversations() {
     }
     return true;
   });
-
-  const isHuman = selected?.humanMode;
-  const currentStatus = selected?.status || 'bot';
-  const availableToAdd = allLabels.filter(l => !(selected?.labels ?? []).includes(l.name));
-
-  const slashMatch = reply.match(/^\/(\w*)$/);
-  const slashSuggestions = slashMatch
-    ? quickReplies.filter(qr => (qr.shortcut ?? '').startsWith(slashMatch[1]))
-    : [];
 
   return (
     <div className={styles.page}>
@@ -559,97 +673,135 @@ export default function Conversations() {
         ) : (
           <>
             <div className={styles.threadHeader}>
-              {/* Row 1: name + resolve/reopen */}
+              {/* Row 1: name + close/reopen */}
               <div className={styles.threadHeaderTop}>
-                <span className={styles.threadName}>{selected.contactName || selected.contactId}</span>
+                <span className={styles.threadName}>
+                  {selected.contactName || selected.contactId}
+                  {isUrgentFlag && <span style={{ marginLeft: 6, fontSize: 14 }}>⚡</span>}
+                </span>
                 <div className={styles.threadActions}>
-                  {currentStatus !== 'resolved' ? (
-                    <button className={`${styles.actionBtn} ${styles.actionResolve}`} onClick={() => dispatch('resolved')} disabled={updating}>
-                      ✓ Resolver
-                    </button>
-                  ) : (
+                  {isArchived ? (
                     <button className={`${styles.actionBtn} ${styles.actionReopen}`} onClick={() => dispatch('to_bot')} disabled={updating}>
                       ↩ Reabrir
+                    </button>
+                  ) : (
+                    <button
+                      className={`${styles.actionBtn} ${styles.actionResolve}`}
+                      onClick={() => dispatch(isHuman ? 'resolved' : 'bot_archive')}
+                      disabled={updating}
+                      title={isHuman ? 'Cerrar caso y archivar' : 'Archivar conversación del bot'}
+                    >
+                      ✓ {isHuman ? 'Cerrar caso' : 'Archivar'}
                     </button>
                   )}
                 </div>
               </div>
 
-              {/* Row 2: badges + dispatch actions + labels */}
+              {/* Row 2: badges + dispatch actions */}
               <div className={styles.threadHeaderBottom}>
                 <div className={styles.threadHeaderBadges}>
                   <ChannelBadge channel={selected.channel} />
                   <StatusChip status={currentStatus} />
                   {selected.assignedTo && <AgentBadge assignedTo={selected.assignedTo} />}
                 </div>
-                <div className={styles.dispatchActions}>
-                  <button
-                    className={`${styles.dispatchBtn} ${styles.dispatchBotBtn} ${!isHuman && currentStatus === 'bot' ? styles.dispatchBtnActive : ''}`}
-                    onClick={() => dispatch('to_bot')}
-                    disabled={updating}
-                    title="Enviar al Bot"
-                  >
-                    🤖 Bot
-                  </button>
-                  <button
-                    className={`${styles.dispatchBtn} ${selected.assignedTo === 'sofia' && isHuman ? styles.dispatchBtnActive : ''}`}
-                    onClick={() => dispatch('to_sofia')}
-                    disabled={updating}
-                    title="Enviar a Mis casos de Sofía"
-                  >
-                    → Sofía
-                  </button>
-                  <button
-                    className={`${styles.dispatchBtn} ${selected.assignedTo === 'joaquin' && isHuman ? styles.dispatchBtnActive : ''}`}
-                    onClick={() => dispatch('to_joaquin')}
-                    disabled={updating}
-                    title="Enviar a Mis casos de Joaquín"
-                  >
-                    → Joaquín
-                  </button>
-                  {currentStatus !== 'urgent' && currentStatus !== 'resolved' && (
+
+                {!isArchived && (
+                  <div className={styles.dispatchActions}>
                     <button
-                      className={`${styles.dispatchBtn} ${styles.dispatchUrgentBtn}`}
-                      onClick={() => dispatch('urgent')}
+                      className={`${styles.dispatchBtn} ${styles.dispatchBotBtn} ${!isHuman && currentStatus === 'bot' ? styles.dispatchBtnActive : ''}`}
+                      onClick={() => dispatch('to_bot')}
                       disabled={updating}
-                      title="Marcar como urgente"
+                      title="Enviar al Bot"
                     >
-                      ⚡ Urgente
+                      🤖 Bot
                     </button>
-                  )}
-                </div>
-                <div className={styles.labelsRow}>
-                  {(selected.labels ?? []).map(l => (
-                    <LabelChip key={l} label={l} labelMap={labelMap} onRemove={removeLabel} />
-                  ))}
-                  <div className={styles.labelAddWrap}>
-                    <button
-                      className={styles.labelAddBtn}
-                      onClick={() => setLabelDropOpen(v => !v)}
-                      title="Agregar etiqueta"
-                    >
-                      + Etiqueta
-                    </button>
-                    {labelDropOpen && availableToAdd.length > 0 && (
-                      <div className={styles.labelDropdown}>
-                        {availableToAdd.map(l => (
-                          <button
-                            key={l.id}
-                            className={styles.labelDropItem}
-                            onClick={() => addLabel(l.name)}
-                          >
-                            <span className={styles.labelDropDot} style={{ background: l.color }} />
-                            {l.name}
-                          </button>
-                        ))}
-                      </div>
+
+                    {/* Take over button: visible when bot is handling the conv */}
+                    {!isHuman && currentStatus === 'bot' && (
+                      <button
+                        className={styles.takeOverBtn}
+                        onClick={() => dispatch('take_over', { agentId: myId })}
+                        disabled={updating}
+                        title="Tomar esta conversación — el bot deja de responder"
+                      >
+                        ✋ Tomar
+                      </button>
                     )}
-                    {labelDropOpen && availableToAdd.length === 0 && (
-                      <div className={styles.labelDropdown}>
-                        <span className={styles.labelDropEmpty}>Sin etiquetas disponibles</span>
-                      </div>
+
+                    <button
+                      className={`${styles.dispatchBtn} ${selected.assignedTo === 'sofia' && isHuman ? styles.dispatchBtnActive : ''}`}
+                      onClick={() => dispatch('to_sofia')}
+                      disabled={updating}
+                      title="Derivar a Sofía"
+                    >
+                      → Sofía
+                    </button>
+                    <button
+                      className={`${styles.dispatchBtn} ${selected.assignedTo === 'joaquin' && isHuman ? styles.dispatchBtnActive : ''}`}
+                      onClick={() => dispatch('to_joaquin')}
+                      disabled={updating}
+                      title="Derivar a Joaquín"
+                    >
+                      → Joaquín
+                    </button>
+
+                    {/* Urgent toggle: always visible, toggles the flag */}
+                    {isUrgentFlag ? (
+                      <button
+                        className={`${styles.dispatchBtn} ${styles.dispatchUnurgentBtn}`}
+                        onClick={() => dispatch('unset_urgent')}
+                        disabled={updating}
+                        title="Quitar urgente"
+                      >
+                        ⚡ Quitar urgente
+                      </button>
+                    ) : (
+                      <button
+                        className={`${styles.dispatchBtn} ${styles.dispatchUrgentBtn}`}
+                        onClick={() => dispatch('set_urgent')}
+                        disabled={updating}
+                        title="Marcar como urgente"
+                      >
+                        ⚡ Urgente
+                      </button>
                     )}
                   </div>
+                )}
+
+                <div className={styles.labelsRow}>
+                  {(selected.labels ?? []).map(l => (
+                    <LabelChip key={l} label={l} labelMap={labelMap} onRemove={!isArchived ? removeLabel : null} />
+                  ))}
+                  {!isArchived && (
+                    <div className={styles.labelAddWrap}>
+                      <button
+                        className={styles.labelAddBtn}
+                        onClick={() => setLabelDropOpen(v => !v)}
+                        title="Agregar etiqueta"
+                      >
+                        + Etiqueta
+                      </button>
+                      {labelDropOpen && availableToAdd.length > 0 && (
+                        <div className={styles.labelDropdown}>
+                          {availableToAdd.map(l => (
+                            <button
+                              key={l.id}
+                              className={styles.labelDropItem}
+                              onClick={() => addLabel(l.name)}
+                            >
+                              <span className={styles.labelDropDot} style={{ background: l.color }} />
+                              {l.name}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {labelDropOpen && availableToAdd.length === 0 && (
+                        <div className={styles.labelDropdown}>
+                          <span className={styles.labelDropEmpty}>Sin etiquetas disponibles</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -667,10 +819,109 @@ export default function Conversations() {
               <div ref={messagesEndRef} />
             </div>
 
-            {isHuman ? (
+            {/* Footer: depends on conversation state */}
+            {isArchived ? (
+              <div className={styles.archivedBanner}>
+                <span>Conversación archivada</span>
+                <button
+                  className={`${styles.dispatchBtn}`}
+                  onClick={() => dispatch('to_bot')}
+                  disabled={updating}
+                >
+                  ↩ Reabrir al Bot
+                </button>
+              </div>
+            ) : isWindowExpired ? (
+              /* ---- Window expired: block text, force template ---- */
+              <div className={styles.windowExpiredPanel}>
+                <div className={styles.windowExpiredHeader}>
+                  <span className={styles.windowExpiredIcon}>⛔</span>
+                  <div>
+                    <p className={styles.windowExpiredTitle}>Ventana de WhatsApp expirada</p>
+                    <p className={styles.windowExpiredDesc}>
+                      {lastClientHours !== null
+                        ? `El cliente no escribió en las últimas ${Math.floor(lastClientHours)}h.`
+                        : 'El cliente no ha iniciado la conversación.'}
+                      {' '}No podés enviar mensajes de texto libre. Solo podés enviar una <strong>plantilla aprobada</strong> para retomar el contacto.
+                    </p>
+                  </div>
+                </div>
+
+                {!templateSendOpen ? (
+                  <button className={styles.openTemplateSendBtn} onClick={openTemplatePanel}>
+                    Enviar plantilla aprobada
+                  </button>
+                ) : (
+                  <div className={styles.templateSendForm}>
+                    {approvedTemplates.length === 0 ? (
+                      <p className={styles.noApprovedWarning}>
+                        No tenés plantillas aprobadas. Creá una en la sección Plantillas y esperá la aprobación de Meta.
+                      </p>
+                    ) : (
+                      <>
+                        <select
+                          className={styles.templateSendSelect}
+                          value={selectedTemplate?.id ?? ''}
+                          onChange={e => pickTemplate(e.target.value)}
+                        >
+                          <option value="">Seleccioná una plantilla aprobada...</option>
+                          {approvedTemplates.map(t => (
+                            <option key={t.id} value={t.id}>
+                              {t.displayName} ({t.name})
+                            </option>
+                          ))}
+                        </select>
+
+                        {selectedTemplate && (
+                          <div className={styles.templatePreviewInChat}>
+                            <p className={styles.templatePreviewText}>{selectedTemplate.bodyText}</p>
+                          </div>
+                        )}
+
+                        {selectedTemplate?.params?.length > 0 && selectedTemplate.params.map((desc, i) => (
+                          <div key={i} className={styles.templateParamRow}>
+                            <span className={styles.templateParamLabel}>{`{{${i + 1}}}`} {desc}</span>
+                            <input
+                              className={styles.templateParamInput}
+                              type="text"
+                              placeholder={desc}
+                              value={templateParams[i] ?? ''}
+                              onChange={e => setTemplateParams(prev => {
+                                const n = [...prev]; n[i] = e.target.value; return n;
+                              })}
+                            />
+                          </div>
+                        ))}
+
+                        {templateSendError && (
+                          <p className={styles.templateSendError}>⚠️ {templateSendError}</p>
+                        )}
+
+                        <div className={styles.templateSendActions}>
+                          <button
+                            className={styles.templateSendCancelBtn}
+                            onClick={() => { setTemplateSendOpen(false); setSelectedTemplate(null); }}
+                          >
+                            Cancelar
+                          </button>
+                          <button
+                            className={styles.templateSendSubmitBtn}
+                            onClick={sendTemplate}
+                            disabled={!selectedTemplate || sendingTemplate}
+                          >
+                            {sendingTemplate ? 'Enviando...' : 'Enviar plantilla'}
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : isHuman ? (
+              /* ---- Normal agent reply form ---- */
               <form className={styles.replyForm} onSubmit={sendReply}>
                 <div className={styles.replyHumanBadge}>
-                  Modo agente activo — Gina no responde · Respondiendo como <strong>{AGENTS.find(a => a.id === myId)?.label ?? myId}</strong>
+                  Modo agente — Gina no responde · Respondiendo como <strong>{AGENTS.find(a => a.id === myId)?.label ?? myId}</strong>
                 </div>
                 <div className={styles.replyRow}>
                   <div className={styles.replyInputWrap}>
@@ -732,7 +983,7 @@ export default function Conversations() {
                   <input
                     ref={mediaInputRef}
                     type="file"
-                    accept="image/*,video/*,audio/*"
+                    accept="image/*,video/*,audio/*,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                     className={styles.mediaFileInput}
                     onChange={handleMediaSelect}
                     disabled={sending}
@@ -742,7 +993,7 @@ export default function Conversations() {
                     className={styles.mediaBtn}
                     onClick={() => mediaInputRef.current?.click()}
                     disabled={sending}
-                    title="Enviar imagen / video / audio"
+                    title="Enviar imagen / video / audio / documento"
                   >
                     📎
                   </button>
@@ -752,9 +1003,19 @@ export default function Conversations() {
                 </div>
               </form>
             ) : (
+              /* ---- Bot is handling the conversation ---- */
               <div className={styles.botFooter}>
                 <span className={styles.botFooterDot} />
                 <span className={styles.botFooterText}>Gina está respondiendo automáticamente</span>
+                <button
+                  className={styles.takeOverBtn}
+                  onClick={() => dispatch('take_over', { agentId: myId })}
+                  disabled={updating}
+                  style={{ marginLeft: 8 }}
+                  title="Intervenir — el bot deja de responder"
+                >
+                  ✋ Tomar conversación
+                </button>
               </div>
             )}
           </>
@@ -923,21 +1184,26 @@ export default function Conversations() {
                 </div>
               </div>
               <div className={styles.newConvField}>
-                <label className={styles.newConvLabel}>Plantilla *</label>
+                <label className={styles.newConvLabel}>Plantilla aprobada *</label>
                 {templates.length === 0 ? (
-                  <p className={styles.newConvHint}>Sin plantillas. Creá una en /templates primero.</p>
+                  <p className={styles.newConvHint}>Sin plantillas. Creá una en la sección Plantillas primero.</p>
+                ) : templates.every(t => t.metaStatus !== 'APPROVED') ? (
+                  <p className={styles.newConvHint}>
+                    Ninguna plantilla está aprobada por Meta todavía. Creá una plantilla y esperá la aprobación, o sincronizá el estado en la sección Plantillas.
+                  </p>
                 ) : (
                   <select
                     className={styles.newConvSelect}
                     value={newTemplate?.id ?? ''}
                     onChange={e => selectTemplate(templates.find(t => t.id === e.target.value) ?? null)}
                   >
-                    <option value="">Seleccionar plantilla...</option>
+                    <option value="">Seleccionar plantilla aprobada...</option>
                     {templates.map(t => {
-                      const notApproved = t.metaStatus && t.metaStatus !== 'APPROVED';
+                      const approved = t.metaStatus === 'APPROVED';
+                      if (!approved) return null;
                       return (
-                        <option key={t.id} value={t.id} disabled={notApproved}>
-                          {t.displayName} ({t.name}){notApproved ? ` — ${t.metaStatus}` : ''}
+                        <option key={t.id} value={t.id}>
+                          ✓ {t.displayName} ({t.name})
                         </option>
                       );
                     })}

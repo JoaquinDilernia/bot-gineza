@@ -3,12 +3,6 @@ import crypto from 'crypto';
 
 const META_API_URL = 'https://graph.facebook.com/v20.0';
 
-/**
- * Verifica la firma del webhook de Meta.
- * @param {Buffer} rawBody
- * @param {string} signature - Header x-hub-signature-256
- * @returns {boolean}
- */
 export function verifyWebhookSignature(rawBody, signature) {
   if (!signature || !process.env.META_APP_SECRET) return false;
 
@@ -20,18 +14,13 @@ export function verifyWebhookSignature(rawBody, signature) {
   return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(signature));
 }
 
-/**
- * Envía un mensaje de texto por WhatsApp.
- * @param {string} to - Número de teléfono del destinatario
- * @param {string} text - Texto del mensaje
- * @returns {Promise<void>}
- */
+// Returns WA message ID on success, null if tokens not configured
 export async function sendWhatsAppMessage(to, text) {
   if (!process.env.META_ACCESS_TOKEN || !process.env.META_PHONE_NUMBER_ID) {
     console.log('[meta] sendWhatsAppMessage skipped — tokens not configured');
-    return;
+    return null;
   }
-  await axios.post(
+  const { data } = await axios.post(
     `${META_API_URL}/${process.env.META_PHONE_NUMBER_ID}/messages`,
     {
       messaging_product: 'whatsapp',
@@ -47,20 +36,15 @@ export async function sendWhatsAppMessage(to, text) {
       },
     }
   );
+  return data.messages?.[0]?.id ?? null;
 }
 
-/**
- * Envía un mensaje de texto por Instagram DM.
- * @param {string} recipientId - PSID del usuario en Instagram
- * @param {string} text
- * @returns {Promise<void>}
- */
 export async function sendInstagramMessage(recipientId, text) {
   if (!process.env.META_ACCESS_TOKEN || !process.env.META_IG_PAGE_ID) {
     console.log('[meta] sendInstagramMessage skipped — tokens not configured');
-    return;
+    return null;
   }
-  await axios.post(
+  const { data } = await axios.post(
     `${META_API_URL}/${process.env.META_IG_PAGE_ID}/messages`,
     {
       recipient: { id: recipientId },
@@ -74,13 +58,9 @@ export async function sendInstagramMessage(recipientId, text) {
       },
     }
   );
+  return data.message_id ?? null;
 }
 
-/**
- * Marca un mensaje de WhatsApp como leído.
- * @param {string} messageId
- * @returns {Promise<void>}
- */
 export async function markWhatsAppAsRead(messageId) {
   if (!process.env.META_ACCESS_TOKEN || !process.env.META_PHONE_NUMBER_ID) return;
   await axios.post(
@@ -99,11 +79,6 @@ export async function markWhatsAppAsRead(messageId) {
   );
 }
 
-/**
- * Descarga un media de Meta y retorna base64 + mimeType.
- * @param {string} mediaId
- * @returns {Promise<{base64: string, mimeType: string}|null>}
- */
 export async function downloadMediaAsBase64(mediaId) {
   if (!process.env.META_ACCESS_TOKEN) return null;
   try {
@@ -124,18 +99,10 @@ export async function downloadMediaAsBase64(mediaId) {
   }
 }
 
-
-/**
- * Envía un mensaje de plantilla de WhatsApp.
- * @param {string} to
- * @param {string} templateName - Nombre técnico de la plantilla en Meta
- * @param {string} language - Código de idioma (ej: 'es_AR', 'en_US')
- * @param {string[]} params - Valores para los parámetros {{1}}, {{2}}, ...
- */
 export async function sendWhatsAppTemplate(to, templateName, language = 'es_AR', params = []) {
   if (!process.env.META_ACCESS_TOKEN || !process.env.META_PHONE_NUMBER_ID) {
     console.log('[meta] sendWhatsAppTemplate skipped — tokens not configured');
-    return;
+    return null;
   }
   const template = {
     name: templateName,
@@ -149,11 +116,12 @@ export async function sendWhatsAppTemplate(to, templateName, language = 'es_AR',
       },
     ];
   }
-  await axios.post(
+  const { data } = await axios.post(
     `${META_API_URL}/${process.env.META_PHONE_NUMBER_ID}/messages`,
     { messaging_product: 'whatsapp', recipient_type: 'individual', to, type: 'template', template },
     { headers: { Authorization: `Bearer ${process.env.META_ACCESS_TOKEN}`, 'Content-Type': 'application/json' } }
   );
+  return data.messages?.[0]?.id ?? null;
 }
 
 export async function uploadMetaMedia(buffer, mimeType) {
@@ -198,6 +166,25 @@ export async function getMetaMediaStream(mediaId, res) {
   res.setHeader('Content-Type', info.mime_type || 'application/octet-stream');
   res.setHeader('Cache-Control', 'private, max-age=3600');
   response.data.pipe(res);
+}
+
+export async function createMetaTemplate({ name, language, category, bodyText, params = [] }) {
+  const wabaId = process.env.META_WHATSAPP_BUSINESS_ACCOUNT_ID;
+  const token  = process.env.META_ACCESS_TOKEN;
+  if (!wabaId || !token) {
+    throw new Error('META_WHATSAPP_BUSINESS_ACCOUNT_ID o META_ACCESS_TOKEN no configurados');
+  }
+  const bodyComponent = { type: 'BODY', text: bodyText };
+  if (params.length > 0) {
+    // Meta requires example values for every variable in the template
+    bodyComponent.example = { body_text: [params.map((_, i) => `ejemplo${i + 1}`)] };
+  }
+  const { data } = await axios.post(
+    `${META_API_URL}/${wabaId}/message_templates`,
+    { name, language, category, components: [bodyComponent] },
+    { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
+  );
+  return data; // { id, status, ... }
 }
 
 export async function fetchMetaTemplateStatuses() {
@@ -245,11 +232,26 @@ export function parseWhatsAppMessage(webhookBody) {
   }
 }
 
-/**
- * Extrae datos de un mensaje entrante de Instagram.
- * @param {object} webhookBody
- * @returns {object|null}
- */
+// Parses WA delivery status updates from webhook
+export function parseWhatsAppStatusUpdate(webhookBody) {
+  try {
+    const entry = webhookBody.entry?.[0];
+    const change = entry?.changes?.[0];
+    const value = change?.value;
+    if (!value?.statuses?.[0]) return null;
+    const s = value.statuses[0];
+    return {
+      waMsgId: s.id,
+      status: s.status, // 'sent', 'delivered', 'read', 'failed'
+      recipientId: s.recipient_id,
+      timestamp: s.timestamp,
+      errors: s.errors ?? [],
+    };
+  } catch {
+    return null;
+  }
+}
+
 export function parseInstagramMessage(webhookBody) {
   try {
     const entry = webhookBody.entry?.[0];
