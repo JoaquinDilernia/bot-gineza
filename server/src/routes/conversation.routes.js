@@ -30,6 +30,17 @@ import { generateConversationSummary } from '../services/claude.service.js';
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 16 * 1024 * 1024 } });
 
+// Normalizes Argentine mobile numbers to E.164 without '+' for the WhatsApp API.
+// Accepts: 5491112345678 | +5491112345678 | 1112345678 | 01112345678 | 91112345678
+function normalizeArgPhone(raw) {
+  let d = raw.trim().replace(/[^\d]/g, '');
+  if (d.startsWith('54')) return d;           // already has country code
+  if (d.startsWith('0')) d = d.slice(1);      // strip local trunk 0
+  if (d.startsWith('9') && d.length === 11) return `54${d}`;   // 9 + area + number
+  if (d.length === 10) return `549${d}`;      // area (2-4 digits) + number, add mobile 9
+  return `54${d}`;                            // fallback: just prepend country code
+}
+
 // ---- Media proxy (must be before /:contactId routes) ----
 router.get('/media/:mediaId', async (req, res) => {
   try {
@@ -56,7 +67,10 @@ router.post('/start', async (req, res) => {
     if (!phone?.trim() || !templateName?.trim()) {
       return res.status(400).json({ error: 'phone y templateName requeridos' });
     }
-    const normalizedPhone = phone.trim().replace(/[^\d]/g, '');
+    const normalizedPhone = normalizeArgPhone(phone);
+    if (normalizedPhone.length < 10 || normalizedPhone.length > 15) {
+      return res.status(400).json({ error: `Número de teléfono inválido: "${normalizedPhone}". Usá formato internacional, ej: 5491112345678` });
+    }
 
     await getOrCreateConversation(normalizedPhone, 'whatsapp', contactName?.trim() || null);
 

@@ -28,7 +28,6 @@ const FILTERS = [
   { value: 'bot',      label: 'Bot' },
   { value: 'mine',     label: 'Mis casos' },
   { value: 'urgent',   label: 'Urgentes' },
-  { value: 'all',      label: 'Todas' },
   { value: 'archived', label: 'Archivos' },
 ];
 
@@ -718,11 +717,11 @@ export default function Conversations() {
                   ) : (
                     <button
                       className={`${styles.actionBtn} ${styles.actionResolve}`}
-                      onClick={() => dispatch(isHuman ? 'resolved' : 'bot_archive')}
+                      onClick={() => dispatch('bot_archive')}
                       disabled={updating}
-                      title={isHuman ? 'Cerrar caso y archivar' : 'Archivar conversación del bot'}
+                      title="Archivar conversación"
                     >
-                      ✓ {isHuman ? 'Cerrar caso' : 'Archivar'}
+                      ✓ Archivar
                     </button>
                   )}
                 </div>

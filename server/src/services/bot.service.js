@@ -241,9 +241,8 @@ export async function processIncomingMessage(msg) {
     });
     console.log(`[bot] Escalando ${from} → agente: ${assignTo ?? 'sin asignar'}`);
   } else if (shouldClose) {
-    // Bot considers case resolved: archive as bot_archived
-    await updateConversationStatus(from, 'bot_archived');
-    console.log(`[bot] Conversación ${from} archivada por el bot`);
+    await updateConversationStatus(from, 'resolved');
+    console.log(`[bot] Conversación ${from} resuelta por el bot`);
   }
 
   if (channel === 'whatsapp') {
